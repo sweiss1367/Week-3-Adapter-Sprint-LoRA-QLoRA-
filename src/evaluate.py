@@ -77,15 +77,6 @@ def load_model_for_eval(model_name: str, adapter_path: str = None, qlora_config_
     return model, tokenizer
 
 
-def free_model(model):
-    """Explicit teardown between comparison variants so GPU memory doesn't accumulate
-    across base -> qlora -> dpo."""
-    del model
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
 @torch.no_grad()
 def generate_ticket(model, tokenizer, complaint: str, max_new_tokens: int = 120) -> str:
     prompt = build_chat_prompt(tokenizer, complaint)
@@ -273,8 +264,20 @@ def run_comparison(args):
         for idx, ex in selected:
             outputs[idx] = generate_ticket(model, tokenizer, ex["complaint"], max_new_tokens=args.max_new_tokens)
         generations[tag] = outputs
-        free_model(model)
-        print(f"Unloaded '{tag}', freed GPU memory (gc.collect() + torch.cuda.empty_cache()).")
+
+        # Delete the actual references held here, not a helper's local parameter --
+        # gc.collect()/empty_cache() can't release the model while this scope still
+        # holds a strong reference to it.
+        del model
+        del tokenizer
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            allocated_gb = round(torch.cuda.memory_allocated() / 1e9, 3)
+            reserved_gb = round(torch.cuda.memory_reserved() / 1e9, 3)
+            print(f"Unloaded '{tag}'. Post-unload GPU memory: allocated={allocated_gb}GB reserved={reserved_gb}GB")
+        else:
+            print(f"Unloaded '{tag}'.")
 
     records = []
     for idx, ex in selected:
