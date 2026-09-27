@@ -145,12 +145,25 @@ def verify_reference_setup(model):
             "verify they start as exact copies."
         )
 
-    mismatches = [key for key, dp in default_tensors.items() if not torch.equal(dp.detach(), ref_tensors[key].detach())]
+    # TRL 1.14.0 casts trainable (i.e. "default") parameters to bfloat16 later in the same
+    # constructor that copies "default" into "ref"; "ref" is frozen so it keeps its
+    # original dtype. A dtype mismatch here is therefore expected, not a bug -- compare in
+    # the policy tensor's dtype (cast the frozen ref tensor to match) rather than loosening
+    # the comparison to an allclose tolerance.
+    dtype_report = {key: {"default_dtype": str(dp.dtype), "ref_dtype": str(ref_tensors[key].dtype)} for key, dp in default_tensors.items()}
+    print("Adapter tensor dtypes (diagnostic):")
+    print(json.dumps(dtype_report, indent=2))
+
+    mismatches = [
+        key for key, dp in default_tensors.items()
+        if not torch.equal(dp.detach(), ref_tensors[key].detach().to(dp.dtype))
+    ]
     if mismatches:
         raise RuntimeError(
             f"{len(mismatches)} adapter tensor(s) differ between 'default' and 'ref' before "
-            f"training started (e.g. {mismatches[0]}) -- TRL's automatic reference copy did "
-            "not produce an exact copy of the SFT state. Aborting."
+            f"training started (e.g. {mismatches[0]}), even after casting 'ref' to "
+            "'default''s dtype -- TRL's automatic reference copy did not produce an exact "
+            "copy of the SFT state. Aborting."
         )
 
     print("Verified: 'default' and 'ref' are exact copies before training; "
