@@ -1,4 +1,6 @@
 {
+  "source_structural_checks": "Computed locally (no tokenizer needed) by src/audit_address_dpo_data.py against data/dpo_pairs.jsonl.",
+  "source_token_measurements": "Measured in Google Colab with the real Qwen/Qwen2.5-0.5B-Instruct tokenizer via `python src/audit_address_dpo_data.py --pairs data/dpo_pairs.jsonl --train-data data/sft_train.jsonl --val-data data/sft_val.jsonl --test-data data/sft_test.jsonl --model Qwen/Qwen2.5-0.5B-Instruct`. These are real measurements, not synthetic or estimated values.",
   "n_pairs": 150,
   "n_duplicate_prompts_within_dataset": 0,
   "overlap_with_sft_train": 0,
@@ -28,7 +30,84 @@
     "max": 270
   },
   "pct_pairs_differing_by_more_than_15pct_chars": 0.0,
-  "chosen_length_tokens": null,
-  "rejected_length_tokens": null,
-  "token_length_note": "Real Qwen tokenizer unavailable in this run -- character-length statistics above are not a substitute for token counts. Rerun in Colab for real token-length numbers."
+  "chosen_length_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 48,
+    "median": 54,
+    "p90": 59,
+    "p95": 59.5,
+    "max": 60
+  },
+  "rejected_length_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 50,
+    "median": 57,
+    "p90": 62,
+    "p95": 62,
+    "max": 64
+  },
+  "prompt_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 123,
+    "median": 137.5,
+    "p90": 149,
+    "p95": 151,
+    "p99": 153.5,
+    "max": 155
+  },
+  "prompt_plus_chosen_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 173,
+    "median": 192,
+    "p90": 205,
+    "p95": 206.5,
+    "p99": 212,
+    "max": 215
+  },
+  "prompt_plus_rejected_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 176,
+    "median": 194,
+    "p90": 208,
+    "p95": 209.5,
+    "p99": 215,
+    "max": 217
+  },
+  "max_prompt_length_truncation": {
+    "basis": "prompt_tokens",
+    "candidates": [
+      {"candidate_len": 128, "n_exceeding": 130, "pct_exceeding": 86.67},
+      {"candidate_len": 192, "n_exceeding": 0, "pct_exceeding": 0.0},
+      {"candidate_len": 256, "n_exceeding": 0, "pct_exceeding": 0.0},
+      {"candidate_len": 384, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt length is 155 tokens, well under 384, not separately reported by the Colab run"},
+      {"candidate_len": 512, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt length is 155 tokens, well under 512, not separately reported by the Colab run"}
+    ]
+  },
+  "max_length_truncation": {
+    "basis_prompt_plus_chosen": [
+      {"candidate_len": 128, "n_exceeding": 150, "pct_exceeding": 100.0},
+      {"candidate_len": 192, "n_exceeding": 69, "pct_exceeding": 46.0},
+      {"candidate_len": 256, "n_exceeding": 0, "pct_exceeding": 0.0},
+      {"candidate_len": 384, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt+chosen length is 215 tokens, well under 384, not separately reported by the Colab run"},
+      {"candidate_len": 512, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt+chosen length is 215 tokens, well under 512, not separately reported by the Colab run"}
+    ],
+    "basis_prompt_plus_rejected": [
+      {"candidate_len": 128, "n_exceeding": 150, "pct_exceeding": 100.0},
+      {"candidate_len": 192, "n_exceeding": 88, "pct_exceeding": 58.67},
+      {"candidate_len": 256, "n_exceeding": 0, "pct_exceeding": 0.0},
+      {"candidate_len": 384, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt+rejected length is 217 tokens, well under 384, not separately reported by the Colab run"},
+      {"candidate_len": 512, "n_exceeding": 0, "pct_exceeding": 0.0, "note": "derived: max prompt+rejected length is 217 tokens, well under 512, not separately reported by the Colab run"}
+    ]
+  },
+  "approval": {
+    "approved_max_prompt_length": 192,
+    "approved_max_length": 256,
+    "rationale": "The longest measured prompt is 155 tokens, so 192 preserves all 150 prompts with reasonable headroom. The longest full prompt+response sequence is 217 tokens (prompt+rejected), so 256 preserves every chosen and rejected sequence (0 truncated at 256 for either). Using 192 for max_length would truncate 46.0% of chosen and 58.67% of rejected sequences; 384/512 provide no additional data-preservation benefit over 256 and would increase memory use. Human-approved from the real Colab tokenizer run before being written into configs/dpo_config.json.",
+    "approved": true
+  }
 }

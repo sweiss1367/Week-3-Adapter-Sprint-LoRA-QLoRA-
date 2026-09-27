@@ -5,9 +5,9 @@
   "reference_adapter_name": "reference",
   "reference_policy_design": "Both adapters are initialized FROM THE SAME SFT checkpoint (sft_adapter_path), loaded onto one shared 4-bit base model. The 'reference' adapter is then frozen (requires_grad=False, eval mode) so it represents the instruction-tuned state immediately before DPO starts -- not the untouched raw base model. Only the 'policy' adapter is trainable. DPOTrainer/DPOConfig are given ref_model=None with model_adapter_name='policy' and ref_adapter_name='reference', so TRL toggles adapters on one shared base rather than materializing a second full model copy. train_dpo.py verifies this setup explicitly (prints which named parameters are trainable vs frozen) before training starts, since this behavior must be confirmed against the installed TRL/PEFT versions rather than assumed.",
   "beta": 0.1,
-  "max_length": null,
-  "max_prompt_length": null,
-  "max_length_status": "PENDING_AUDIT: derive from configs/qlora_config.json max_seq_len once that value is approved from the token-length audit.",
+  "max_length": 256,
+  "max_prompt_length": 192,
+  "max_length_status": "APPROVED. Selected from the real Qwen/Qwen2.5-0.5B-Instruct tokenizer audit run in Google Colab against the 150-pair controlled DPO dataset (data/dpo_pairs.jsonl) -- see data/dpo_pairs_audit.json. Measured: prompt tokens min 123/median 137.5/p90 149/p95 151/p99 153.5/max 155; prompt+chosen min 173/median 192/p90 205/p95 206.5/p99 212/max 215; prompt+rejected min 176/median 194/p90 208/p95 209.5/p99 215/max 217. max_prompt_length=192 preserves all 150 prompts (max 155) with headroom; max_length=256 preserves every chosen and rejected sequence (max 217) -- at 192, 46.0% of chosen and 58.67% of rejected sequences would be truncated, and 384/512 were rejected as adding memory cost with no data-preservation benefit over 256. Human-approved before being set here.",
   "training": {
     "per_device_train_batch_size": 2,
     "gradient_accumulation_steps": 8,
