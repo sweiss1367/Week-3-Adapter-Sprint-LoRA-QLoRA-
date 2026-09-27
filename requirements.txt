@@ -1,0 +1,11 @@
+# Pin loosely -- exact versions should be recorded from the actual Colab runtime at
+# execution time (e.g. `pip freeze`) since DPO's reference-adapter behavior (see
+# src/train_dpo.py) depends on the installed trl/peft versions and is verified at runtime,
+# not assumed from these ranges.
+torch>=2.3
+transformers>=4.45
+peft>=0.13
+trl>=0.11
+bitsandbytes>=0.43
+accelerate>=0.34
+datasets>=2.20

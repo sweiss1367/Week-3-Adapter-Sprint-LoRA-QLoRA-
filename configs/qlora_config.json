@@ -1,0 +1,43 @@
+{
+  "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+  "max_seq_len": null,
+  "max_seq_len_status": "PENDING_AUDIT: run src/audit_instruction_data.py against data/sft_train.jsonl and get human approval before setting this value. Do not train with a guessed number.",
+  "lora": {
+    "r": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "bias": "none",
+    "task_type": "CAUSAL_LM",
+    "target_modules_proposed": [
+      "q_proj", "k_proj", "v_proj", "o_proj",
+      "gate_proj", "up_proj", "down_proj"
+    ],
+    "target_modules_status": "PROPOSED capacity choice, not a proven requirement. Verify these are the real module names for Qwen2.5-0.5B-Instruct via model.named_modules() at load time (train_qlora.py does this and asserts on mismatch). Attention-only (q_proj, v_proj) is a defensible narrower alternative for a mostly stylistic/formatting task; the broader attention+MLP set trades more trainable parameters for more capacity, to be measured against actual eval results, not assumed superior."
+  },
+  "quantization": {
+    "load_in_4bit": true,
+    "bnb_4bit_quant_type": "nf4",
+    "bnb_4bit_compute_dtype": "bfloat16",
+    "bnb_4bit_use_double_quant": true
+  },
+  "training": {
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "num_train_epochs": 3,
+    "learning_rate": 2e-4,
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.03,
+    "max_grad_norm": 0.3,
+    "optim": "paged_adamw_8bit",
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "seed": 42
+  },
+  "deliberate_oom": {
+    "status": "NOT YET EXECUTED",
+    "unsafe_batch_size": 32,
+    "unsafe_seq_len": 1024,
+    "gradient_checkpointing": false,
+    "rationale": "Intended to genuinely exceed the T4 memory budget via activation memory scaling with batch_size x seq_len^2 x num_layers once gradient checkpointing is off. Raise these further if this exact config does not OOM on the allocated Colab GPU -- the goal is a real torch.cuda.OutOfMemoryError, not these specific numbers."
+  }
+}

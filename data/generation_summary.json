@@ -1,0 +1,8 @@
+{
+  "total": 360,
+  "train": 280,
+  "val": 30,
+  "test": 50,
+  "no_address_share": 0.153,
+  "seed": 42
+}

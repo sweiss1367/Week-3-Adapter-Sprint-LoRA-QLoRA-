@@ -1,0 +1,21 @@
+{
+  "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+  "sft_adapter_path": "outputs/qlora_adapter",
+  "policy_adapter_name": "policy",
+  "reference_adapter_name": "reference",
+  "reference_policy_design": "Both adapters are initialized FROM THE SAME SFT checkpoint (sft_adapter_path), loaded onto one shared 4-bit base model. The 'reference' adapter is then frozen (requires_grad=False, eval mode) so it represents the instruction-tuned state immediately before DPO starts -- not the untouched raw base model. Only the 'policy' adapter is trainable. DPOTrainer/DPOConfig are given ref_model=None with model_adapter_name='policy' and ref_adapter_name='reference', so TRL toggles adapters on one shared base rather than materializing a second full model copy. train_dpo.py verifies this setup explicitly (prints which named parameters are trainable vs frozen) before training starts, since this behavior must be confirmed against the installed TRL/PEFT versions rather than assumed.",
+  "beta": 0.1,
+  "max_length": null,
+  "max_prompt_length": null,
+  "max_length_status": "PENDING_AUDIT: derive from configs/qlora_config.json max_seq_len once that value is approved from the token-length audit.",
+  "training": {
+    "per_device_train_batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "num_train_epochs": 1,
+    "learning_rate": 5e-5,
+    "optim": "paged_adamw_8bit",
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "seed": 42
+  }
+}

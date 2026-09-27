@@ -1,4 +1,16 @@
-outputs/
+# Large / regenerable artifacts -- checkpoints and adapter weight binaries live here.
+# Small reproducibility evidence (configs, experiment logs, failure logs, eval json/csv,
+# generated jsonl datasets) lives under data/ and logs/, which are NOT ignored below.
+outputs/*
+!outputs/.gitkeep
+
+# Model weight / checkpoint file types, wherever they end up
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

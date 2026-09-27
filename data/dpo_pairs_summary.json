@@ -1,0 +1,10 @@
+{
+  "n_pairs": 180,
+  "corruption_type_counts": {
+    "drop_field": 44,
+    "wrong_category": 36,
+    "malformed_json": 32,
+    "wrong_address": 38,
+    "hallucinate_address": 30
+  }
+}
