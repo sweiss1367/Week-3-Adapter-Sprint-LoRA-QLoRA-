@@ -75,6 +75,43 @@ def verify_target_modules(model, proposed_targets):
     print(f"All linear layer leaf names found in model: {sorted(linear_leaf_names)}")
 
 
+def print_tokenizer_info(tokenizer):
+    print("Tokenizer configuration:")
+    print(f"  pad_token: {tokenizer.pad_token!r}")
+    print(f"  pad_token_id: {tokenizer.pad_token_id!r}")
+    print(f"  eos_token: {tokenizer.eos_token!r}")
+    print(f"  eos_token_id: {tokenizer.eos_token_id!r}")
+    print(f"  padding_side: {tokenizer.padding_side!r}")
+
+
+def validate_labels(train_ds, val_ds):
+    """Validation only -- does not modify either dataset or max_seq_len. Aborts before
+    training if any example has zero supervised (non -100) label tokens, since that
+    example would contribute no training signal and risks a nan loss."""
+    train_counts = [sum(1 for l in labels if l != -100) for labels in train_ds["labels"]]
+    val_counts = [sum(1 for l in labels if l != -100) for labels in val_ds["labels"]]
+    all_counts = train_counts + val_counts
+
+    n_zero = sum(1 for c in all_counts if c == 0)
+    summary = {
+        "n_train_examples": len(train_ds),
+        "n_val_examples": len(val_ds),
+        "min_supervised_target_tokens": min(all_counts),
+        "max_supervised_target_tokens": max(all_counts),
+        "n_examples_with_zero_supervised_tokens": n_zero,
+    }
+    print("Label integrity check (train + val combined for min/max/zero-count):")
+    print(json.dumps(summary, indent=2))
+
+    if n_zero > 0:
+        raise SystemExit(
+            f"{n_zero} example(s) have zero supervised (non -100) label tokens -- these "
+            "would contribute no training signal or risk a nan loss. Aborting before "
+            "training rather than silently training on them."
+        )
+    return summary
+
+
 def report_trainable_parameters(model):
     trainable, total = 0, 0
     for _, param in model.named_parameters():
@@ -149,6 +186,7 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    print_tokenizer_info(tokenizer)
 
     base_model = AutoModelForCausalLM.from_pretrained(
         cfg["model_name"],
@@ -168,6 +206,10 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
         target_modules=cfg["lora"]["target_modules_proposed"],
     )
     model = get_peft_model(model, lora_cfg)
+    if cfg["training"]["gradient_checkpointing"]:
+        # use_cache=True is incompatible with gradient checkpointing (it stores
+        # activations needed for backward specifically because caching is off).
+        model.config.use_cache = False
     param_report = report_trainable_parameters(model)
 
     train_examples = load_jsonl(os.path.join(data_dir, "sft_train.jsonl"))
@@ -175,6 +217,7 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
     max_seq_len = cfg["max_seq_len"]
     train_ds = build_sft_dataset(train_examples, tokenizer, max_seq_len)
     val_ds = build_sft_dataset(val_examples, tokenizer, max_seq_len)
+    validate_labels(train_ds, val_ds)
 
     step_timer = StepTimingCallback()
     args = build_training_args(cfg, os.path.join(out_dir, "sft_ckpt"))
@@ -251,6 +294,8 @@ def run_deliberate_oom(cfg: dict, log_path: str):
     unsafe_model = prepare_model_for_kbit_training(unsafe_base, use_gradient_checkpointing=False)
     unsafe_model = get_peft_model(unsafe_model, _lora_config(cfg))
     unsafe_model.gradient_checkpointing_disable()
+    # use_cache is intentionally left at its default here -- gradient checkpointing is
+    # off for this path on purpose, so there's no use_cache/checkpointing conflict to guard against.
     unsafe_model.train()
     unsafe_optimizer = torch.optim.AdamW(unsafe_model.parameters(), lr=2e-4)
     unsafe_batch = None
@@ -298,6 +343,9 @@ def run_deliberate_oom(cfg: dict, log_path: str):
     fixed_base = _fresh_quantized_base(cfg)
     fixed_model = prepare_model_for_kbit_training(fixed_base, use_gradient_checkpointing=True)
     fixed_model = get_peft_model(fixed_model, _lora_config(cfg))
+    # This recovery run has gradient checkpointing on -- disable KV caching to avoid the
+    # same use_cache/checkpointing conflict guarded against in run_safe_training.
+    fixed_model.config.use_cache = False
     fixed_model.train()
     fixed_optimizer = torch.optim.AdamW(fixed_model.parameters(), lr=2e-4)
 
