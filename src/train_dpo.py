@@ -95,6 +95,72 @@ def load_policy_model(cfg: dict, qlora_cfg: dict):
     return model, tokenizer
 
 
+def restore_fp32_policy_for_fp16_t4(model, cfg):
+    """
+    Hardware-compatibility fix for this T4 runtime, not a design change to the
+    reference-policy setup.
+
+    TRL 1.14.0's DPOTrainer constructor, having just copied "default" into "ref", later
+    in that same constructor casts every trainable ("default") parameter to bfloat16;
+    "ref" is frozen and keeps its original (FP32) dtype. With fp16=True, Accelerate's
+    GradScaler then fails to unscale BF16 gradients on this T4
+    (NotImplementedError: _amp_foreach_non_finite_check_and_unscale_cuda not implemented
+    for 'BFloat16'). BF16 trainable parameters are simply incompatible with fp16 mixed
+    precision here.
+
+    Restores each trainable ".default." parameter to an FP32 CLONE OF ITS FROZEN ".ref."
+    COUNTERPART -- not a cast of the already-BF16 default tensor (that would keep the
+    BF16 rounding loss), but the original SFT adapter values straight from "ref",
+    promoted to FP32. This both restores the exact pre-BF16-cast initialization and gives
+    the FP16 GradScaler FP32 trainable parameters, which it supports.
+
+    Runs only when this run is configured for fp16 (and not bf16); a no-op otherwise. The
+    frozen "ref" adapter and every base-model parameter are left untouched.
+    """
+    if not (cfg["training"].get("fp16") and not cfg["training"].get("bf16")):
+        return
+
+    peft_config = getattr(model, "peft_config", {})
+    if "default" not in peft_config or "ref" not in peft_config:
+        raise RuntimeError(
+            "restore_fp32_policy_for_fp16_t4 requires both 'default' and 'ref' adapters to "
+            "already exist on the model -- call this after DPOTrainer construction, which "
+            "is what creates 'ref'."
+        )
+
+    ref_by_key = {
+        name.replace(".ref.", ".<adapter>."): param
+        for name, param in model.named_parameters()
+        if ".ref." in name
+    }
+
+    n_tensors, n_params = 0, 0
+    for name, param in model.named_parameters():
+        if ".default." not in name or not param.requires_grad:
+            continue
+        key = name.replace(".default.", ".<adapter>.")
+        ref_param = ref_by_key.get(key)
+        if ref_param is None:
+            raise RuntimeError(
+                f"No matching '.ref.' tensor found for trainable parameter '{name}' -- "
+                "cannot restore it from the frozen reference. Aborting."
+            )
+        with torch.no_grad():
+            param.data = ref_param.detach().to(torch.float32).clone()
+        n_tensors += 1
+        n_params += param.numel()
+
+    default_dtypes = sorted({str(p.dtype) for n, p in model.named_parameters() if ".default." in n})
+    ref_dtypes = sorted({str(p.dtype) for n, p in model.named_parameters() if ".ref." in n})
+
+    print(
+        f"restore_fp32_policy_for_fp16_t4: restored {n_tensors} tensor(s) "
+        f"({n_params:,} parameters) in 'default' to FP32 clones of 'ref'."
+    )
+    print(f"Resulting 'default' dtypes: {default_dtypes}")
+    print(f"Resulting 'ref' dtypes: {ref_dtypes}")
+
+
 def verify_reference_setup(model):
     """
     Must be called after DPOTrainer's constructor has run (TRL 1.14.0 creates the "ref"
@@ -240,6 +306,11 @@ def main():
             processing_class=tokenizer,
             callbacks=[step_timer, memory_monitor],
         )
+        # TRL's constructor above also casts trainable ("default") params to bfloat16,
+        # which this T4 + fp16 combination can't back-propagate through (GradScaler
+        # can't unscale BF16 gradients) -- restore default to an FP32 copy of the
+        # still-FP32 "ref" before verifying or training.
+        restore_fp32_policy_for_fp16_t4(model, cfg)
         # TRL creates the "ref" adapter inside the constructor above -- verify now,
         # before any optimizer step can make "default" and "ref" diverge.
         verify_reference_setup(model)
