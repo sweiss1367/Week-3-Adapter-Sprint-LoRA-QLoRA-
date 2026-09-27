@@ -172,6 +172,11 @@ def build_training_args(cfg: dict, out_dir: str) -> TrainingArguments:
         bf16=t["bf16"],
         fp16=t.get("fp16", False),
         gradient_checkpointing=t["gradient_checkpointing"],
+        # Verified against the installed transformers (TrainingArguments accepts
+        # gradient_checkpointing_kwargs) -- explicit use_reentrant=False avoids the
+        # torch.utils.checkpoint UserWarning and the reentrant-backward footguns it warns
+        # about (e.g. with frozen/quantized base params under PEFT).
+        gradient_checkpointing_kwargs={"use_reentrant": False} if t["gradient_checkpointing"] else None,
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="no",
@@ -192,11 +197,15 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
         cfg["model_name"],
         quantization_config=build_bnb_config(cfg),
         device_map={"": 0},
-        torch_dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
+        dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
     )
     verify_target_modules(base_model, cfg["lora"]["target_modules_proposed"])
 
-    model = prepare_model_for_kbit_training(base_model, use_gradient_checkpointing=cfg["training"]["gradient_checkpointing"])
+    model = prepare_model_for_kbit_training(
+        base_model,
+        use_gradient_checkpointing=cfg["training"]["gradient_checkpointing"],
+        gradient_checkpointing_kwargs={"use_reentrant": False} if cfg["training"]["gradient_checkpointing"] else None,
+    )
     lora_cfg = LoraConfig(
         r=cfg["lora"]["r"],
         lora_alpha=cfg["lora"]["alpha"],
@@ -253,7 +262,7 @@ def _fresh_quantized_base(cfg: dict):
         cfg["model_name"],
         quantization_config=build_bnb_config(cfg),
         device_map={"": 0},
-        torch_dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
+        dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
     )
 
 
@@ -341,7 +350,9 @@ def run_deliberate_oom(cfg: dict, log_path: str):
 
     # --- Recovery run: entirely fresh base model + fresh adapter, safe config ---
     fixed_base = _fresh_quantized_base(cfg)
-    fixed_model = prepare_model_for_kbit_training(fixed_base, use_gradient_checkpointing=True)
+    fixed_model = prepare_model_for_kbit_training(
+        fixed_base, use_gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
+    )
     fixed_model = get_peft_model(fixed_model, _lora_config(cfg))
     # This recovery run has gradient checkpointing on -- disable KV caching to avoid the
     # same use_cache/checkpointing conflict guarded against in run_safe_training.
