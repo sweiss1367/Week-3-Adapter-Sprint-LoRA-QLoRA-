@@ -4,18 +4,30 @@ built by generate_address_dpo_data.py). Verifies the design constraint directly 
 and rejected must differ in exactly one field, address_or_null -- rather than assuming the
 generator got it right, plus duplication/leakage checks against every SFT split.
 
-Character-length statistics are always computed. Real token-length statistics additionally
-require the Hugging Face Hub (to fetch the Qwen tokenizer); if that isn't reachable, those
-fields are left null with an explicit note -- never substituted with character counts.
+Character-length statistics (chosen/rejected response only) are always computed. Real
+token-length statistics -- including the full DPO prompt and prompt+response sequences
+that DPOTrainer will actually see -- additionally require the Hugging Face Hub (to fetch
+the Qwen tokenizer); if that isn't reachable, all token-length fields are left null with
+an explicit note, never substituted with character counts or estimates.
+
+The prompt is built with generate_instruction_data.build_chat_prompt(), the exact same
+function train_dpo.py calls (`dataset.map(lambda row: {"prompt": build_chat_prompt(tokenizer,
+row["prompt"])})`), so prompt_tokens/prompt_plus_chosen_tokens/prompt_plus_rejected_tokens
+reflect what DPOTrainer actually receives, not an approximation of it.
 
 Usage:
     python src/audit_address_dpo_data.py --pairs data/dpo_pairs.jsonl \
-        --train-data data/sft_train.jsonl --val-data data/sft_val.jsonl --test-data data/sft_test.jsonl
+        --train-data data/sft_train.jsonl --val-data data/sft_val.jsonl --test-data data/sft_test.jsonl \
+        --model Qwen/Qwen2.5-0.5B-Instruct
 """
 import argparse
 import json
 import os
 import statistics
+
+from generate_instruction_data import build_chat_prompt
+
+CANDIDATE_LENGTHS = [128, 192, 256, 384, 512]
 
 
 def load_jsonl(path):
@@ -44,6 +56,33 @@ def length_summary(lengths, unit: str):
         "p95": round(percentile(lengths, 95), 1),
         "max": max(lengths),
     }
+
+
+def summarize_full(lengths, unit: str):
+    """min/median/p90/p95/p99/max -- used for prompt/combined sequence lengths, where a
+    p99 is meaningful given the dataset size."""
+    return {
+        "unit": unit,
+        "n": len(lengths),
+        "min": min(lengths),
+        "median": round(statistics.median(lengths), 1),
+        "p90": round(percentile(lengths, 90), 1),
+        "p95": round(percentile(lengths, 95), 1),
+        "p99": round(percentile(lengths, 99), 1),
+        "max": max(lengths),
+    }
+
+
+def truncation_report(lengths, candidates=CANDIDATE_LENGTHS):
+    n = len(lengths)
+    return [
+        {
+            "candidate_len": c,
+            "n_exceeding": sum(1 for l in lengths if l > c),
+            "pct_exceeding": round(100 * sum(1 for l in lengths if l > c) / n, 2) if n else None,
+        }
+        for c in candidates
+    ]
 
 
 def try_load_tokenizer(model_name: str):
@@ -141,12 +180,37 @@ def main():
         rejected_tok_lens = [len(tokenizer(p["rejected"], add_special_tokens=False)["input_ids"]) for p in pairs]
         report["chosen_length_tokens"] = length_summary(chosen_tok_lens, unit="tokens")
         report["rejected_length_tokens"] = length_summary(rejected_tok_lens, unit="tokens")
+
+        # Same construction train_dpo.py uses: build_chat_prompt(tokenizer, row["prompt"]).
+        prompt_texts = [build_chat_prompt(tokenizer, p["prompt"]) for p in pairs]
+        prompt_tok_lens = [len(tokenizer(t, add_special_tokens=False)["input_ids"]) for t in prompt_texts]
+        combined_chosen_lens = [pt + ct for pt, ct in zip(prompt_tok_lens, chosen_tok_lens)]
+        combined_rejected_lens = [pt + rt for pt, rt in zip(prompt_tok_lens, rejected_tok_lens)]
+
+        report["prompt_tokens"] = summarize_full(prompt_tok_lens, unit="tokens")
+        report["prompt_plus_chosen_tokens"] = summarize_full(combined_chosen_lens, unit="tokens")
+        report["prompt_plus_rejected_tokens"] = summarize_full(combined_rejected_lens, unit="tokens")
+
+        report["max_prompt_length_truncation"] = {
+            "basis": "prompt_tokens",
+            "candidates": truncation_report(prompt_tok_lens),
+        }
+        report["max_length_truncation"] = {
+            "basis_prompt_plus_chosen": truncation_report(combined_chosen_lens),
+            "basis_prompt_plus_rejected": truncation_report(combined_rejected_lens),
+        }
     else:
         report["chosen_length_tokens"] = None
         report["rejected_length_tokens"] = None
+        report["prompt_tokens"] = None
+        report["prompt_plus_chosen_tokens"] = None
+        report["prompt_plus_rejected_tokens"] = None
+        report["max_prompt_length_truncation"] = None
+        report["max_length_truncation"] = None
         report["token_length_note"] = (
             "Real Qwen tokenizer unavailable in this run -- character-length statistics above "
-            "are not a substitute for token counts. Rerun in Colab for real token-length numbers."
+            "are not a substitute for token counts, and no estimate was substituted for the "
+            "prompt/prompt+response token fields. Rerun in Colab for real token-length numbers."
         )
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
