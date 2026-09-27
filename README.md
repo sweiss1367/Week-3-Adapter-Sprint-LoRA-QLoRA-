@@ -28,8 +28,10 @@ src/
   audit_instruction_data.py     token-length audit; run BEFORE choosing max_seq_len
   generate_preference_data.py   SUPERSEDED mixed-corruption DPO generator -- kept for reference only, not used to build the current data/dpo_pairs.jsonl (see below)
   audit_preference_data.py      generic multi-corruption preference-dataset audit (for the superseded design)
-  generate_address_dpo_data.py  CURRENT DPO generator -- controlled, single-signal missing-address dataset
-  audit_address_dpo_data.py     CURRENT preference-dataset audit; run BEFORE DPO training
+  generate_address_dpo_data.py  DPO v1 generator -- 150 missing-address-only pairs (see "DPO v2" below for why this was superseded)
+  audit_address_dpo_data.py     DPO v1 preference-dataset audit
+  generate_address_dpo_data_v2.py  CURRENT DPO generator -- balanced 75 missing-address + 75 addressed-control pairs
+  audit_address_dpo_data_v2.py     CURRENT preference-dataset audit; run BEFORE DPO training
   train_qlora.py                QLoRA SFT + the deliberate OOM demonstration and its fix
   train_dpo.py                  DPO with a frozen-adapter reference (see below)
   evaluate.py                   generation + scoring for base / QLoRA / DPO on held-out data
@@ -97,11 +99,28 @@ for each rubric area instead of a notebook cell).
   key order). This isolates the missing-address signal completely -- there is no other way for DPO to
   distinguish chosen from rejected in this dataset. `evaluate.py` reports `address_null_precision` /
   `address_null_recall` to measure whether this transferred.
-- **Current preference-dataset audit** (`src/audit_address_dpo_data.py`, run against the current
-  `data/dpo_pairs.jsonl`): 150 pairs, 0 duplicate prompts, 0 overlap with `sft_train`/`sft_val`/
-  `sft_test`, 0 invented addresses leaking into their source complaint, 0 key-order violations, 0
-  non-address-field violations (i.e. every pair verified byte-for-byte identical outside
-  `address_or_null`), 0% of pairs differing by more than 15% in character length.
+- **DPO v1 preference-dataset audit** (`src/audit_address_dpo_data.py`, against `data/dpo_pairs.jsonl`):
+  150 pairs, 0 duplicate prompts, 0 overlap with `sft_train`/`sft_val`/`sft_test`, 0 invented addresses
+  leaking into their source complaint, 0 key-order violations, 0 non-address-field violations, 0% of
+  pairs differing by more than 15% in character length.
+- **DPO v2: fixing an overgeneralization DPO v1 actually exhibited**. The deterministic 10-example
+  held-out comparison (see below) showed DPO v1 scored `missing_address_accuracy=1.0` but
+  `addressed_control_accuracy=0.0` — it output `address_or_null: null` on every one of the 5
+  addressed-control examples too, not just the 5 null-gold ones. Root cause: v1's preference dataset
+  was 150/150 missing-address pairs, so the only signal DPO ever saw was "prefer null" — nothing ever
+  penalized dropping a real address. `generate_address_dpo_data_v2.py` replaces it with a **balanced**
+  150-pair set: 75 missing-address pairs (unchanged design) plus 75 new addressed-control pairs where
+  `chosen` preserves a real, complaint-stated street and `rejected` is the same ticket with
+  `address_or_null` set to `null` — the mirror-image corruption. Every pair still differs from its
+  counterpart in exactly `address_or_null` (verified structurally, direction-agnostic). `data/dpo_pairs.jsonl`
+  (v1) is untouched; v2 lives in `data/dpo_pairs_v2.jsonl`, and v2 complaints were generated fresh and
+  checked for zero overlap with `sft_train`/`sft_val`/`sft_test` **and** with v1's own prompts.
+  `src/audit_address_dpo_data_v2.py` adds two behavior-specific checks beyond the v1 audit: every
+  missing-address prompt is confirmed to contain no street name, and every addressed-control prompt is
+  confirmed to actually contain its own gold street (0 violations found either way on the real
+  150-pair set: 75/75 split, 0 duplicates, 0 overlap with any SFT split or v1). DPO v2 trains from the
+  same `outputs/qlora_adapter` starting policy as v1 and saves to `outputs/dpo_adapter_v2`
+  (`train_dpo.py --adapter-out-dir`) so v1's adapter and logs are never overwritten.
 
 ## How to run
 

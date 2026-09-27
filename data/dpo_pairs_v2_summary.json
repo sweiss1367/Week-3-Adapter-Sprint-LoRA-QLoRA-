@@ -1,0 +1,15 @@
+{
+  "design": "balanced v2: 75 missing-address + 75 addressed-control pairs (replaces v1's all-missing-address design, which over-generalized to always predicting null)",
+  "n_pairs": 150,
+  "n_missing_address_pairs": 75,
+  "n_addressed_control_pairs": 75,
+  "seed": 42,
+  "excluded_complaints_checked": 585,
+  "v1_data_checked_for_overlap": "../data/dpo_pairs.jsonl",
+  "overlap_found": {
+    "sft_train": 0,
+    "sft_val": 0,
+    "sft_test": 0,
+    "dpo_v1": 0
+  }
+}

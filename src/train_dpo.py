@@ -261,6 +261,10 @@ def main():
     parser.add_argument("--qlora-config", default="configs/qlora_config.json")
     parser.add_argument("--data", default="data/dpo_pairs.jsonl")
     parser.add_argument("--out-dir", default="outputs")
+    parser.add_argument("--adapter-out-dir", default=None,
+                         help="where to save the final policy adapter; defaults to <out-dir>/dpo_adapter. "
+                              "Set this to a distinct path (e.g. outputs/dpo_adapter_v2) to keep a prior "
+                              "run's adapter intact instead of overwriting it.")
     parser.add_argument("--log-path", default="logs/experiment_log.json")
     parser.add_argument("--log-history-path", default="logs/dpo_trainer_log_history.json")
     args = parser.parse_args()
@@ -322,7 +326,7 @@ def main():
 
     save_and_print_log_history(trainer, args.log_history_path)
 
-    adapter_out = os.path.join(args.out_dir, "dpo_adapter")
+    adapter_out = args.adapter_out_dir or os.path.join(args.out_dir, "dpo_adapter")
     model.save_pretrained(adapter_out, selected_adapters=["default"])
     tokenizer.save_pretrained(adapter_out)
     print(f"Saved DPO policy adapter (default only, not ref) to {adapter_out}")
