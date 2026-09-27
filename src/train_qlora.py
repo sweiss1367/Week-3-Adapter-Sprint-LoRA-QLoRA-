@@ -166,7 +166,7 @@ def build_training_args(cfg: dict, out_dir: str) -> TrainingArguments:
         num_train_epochs=t["num_train_epochs"],
         learning_rate=t["learning_rate"],
         lr_scheduler_type=t["lr_scheduler_type"],
-        warmup_ratio=t["warmup_ratio"],
+        warmup_steps=t["warmup_steps"],
         max_grad_norm=t["max_grad_norm"],
         optim=t["optim"],
         bf16=t["bf16"],
