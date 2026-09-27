@@ -361,8 +361,15 @@ def run_deliberate_oom(cfg: dict, log_path: str):
     fixed_model.train()
     fixed_optimizer = torch.optim.AdamW(fixed_model.parameters(), lr=2e-4)
 
+    # Apply the two cheapest fixes first: enable gradient checkpointing (already done
+    # above) and reduce the micro-batch to the approved training batch size. Sequence
+    # length is intentionally left equal to the unsafe attempt's (oom_cfg["unsafe_seq_len"])
+    # rather than also dropped to cfg["max_seq_len"] -- changing three variables at once
+    # would not isolate which fix actually resolved the OOM.
+    fixed_seq_len = oom_cfg["unsafe_seq_len"]
+
     def run_fixed_step():
-        batch = _build_padded_batch(tokenizer, cfg["training"]["per_device_train_batch_size"], cfg["max_seq_len"], fixed_model.device)
+        batch = _build_padded_batch(tokenizer, cfg["training"]["per_device_train_batch_size"], fixed_seq_len, fixed_model.device)
         outputs = fixed_model(**batch)
         outputs.loss.backward()
         fixed_optimizer.step()
@@ -370,7 +377,7 @@ def run_deliberate_oom(cfg: dict, log_path: str):
 
     profile_run(
         "post_fix_step", run_fixed_step,
-        config={"batch_size": cfg["training"]["per_device_train_batch_size"], "seq_len": cfg["max_seq_len"], "gradient_checkpointing": True},
+        config={"batch_size": cfg["training"]["per_device_train_batch_size"], "seq_len": fixed_seq_len, "gradient_checkpointing": True},
         log_path=log_path,
     )
     del fixed_model, fixed_base, fixed_optimizer
