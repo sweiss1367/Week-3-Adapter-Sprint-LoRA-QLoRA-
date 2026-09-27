@@ -1,0 +1,482 @@
+{
+  "selection_rule": {
+    "description": "Deterministic, decided before any inference: the first 5 examples in data/sft_test.jsonl file order whose gold address_or_null is null, then the first 5 examples in file order whose gold address_or_null is not null. Original file order is preserved within each subgroup.",
+    "test_data_file": "data/sft_test.jsonl",
+    "n_null_selected": 5,
+    "n_addressed_selected": 5,
+    "selected_test_indices": [
+      2,
+      4,
+      8,
+      12,
+      20,
+      0,
+      1,
+      3,
+      5,
+      6
+    ],
+    "selected_test_indices_null": [
+      2,
+      4,
+      8,
+      12,
+      20
+    ],
+    "selected_test_indices_addressed": [
+      0,
+      1,
+      3,
+      5,
+      6
+    ]
+  },
+  "generation_settings": {
+    "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+    "do_sample": false,
+    "max_new_tokens": 120,
+    "same_prompt_construction_for_all_variants": true,
+    "qlora_adapter_path": "outputs/qlora_adapter",
+    "dpo_adapter_path": "outputs/dpo_adapter",
+    "quantization": {
+      "load_in_4bit": true,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_compute_dtype": "float16",
+      "bnb_4bit_compute_dtype_status": "The NVIDIA T4 has no native bf16 support -- float16 is required here, not a stylistic choice. src/resource_monitor.check_hardware() verifies this against the detected GPU at startup.",
+      "bnb_4bit_use_double_quant": true
+    }
+  },
+  "records": [
+    {
+      "test_index": 2,
+      "complaint": "hi, please take care of this when you can -- there's a deep pothole that opened up in the middle of the road near my house, i don't know the exact address",
+      "gold": {
+        "category": "pothole",
+        "department": "Public Works",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A deep pothole that opened up in the middle of the road",
+        "requested_action": "Dispatch pothole repair crew"
+      },
+      "base_raw_output": "{\n  \"category\": \"emergency\",\n  \"department\": \"police\",\n  \"priority\": \"high\",\n  \"address_or_null\": \"no address provided\",\n  \"description\": \"A deep pothole has opened up on your property near your home, causing traffic congestion and potential damage to vehicles passing through.\",\n  \"requested_action\": \"contact local emergency services for assistance\"\n}",
+      "base_parsed": {
+        "category": "emergency",
+        "department": "police",
+        "priority": "high",
+        "address_or_null": "no address provided",
+        "description": "A deep pothole has opened up on your property near your home, causing traffic congestion and potential damage to vehicles passing through.",
+        "requested_action": "contact local emergency services for assistance"
+      },
+      "qlora_raw_output": "{\"category\": \"pothole\", \"department\": \"Public Works\", \"priority\": \"medium\", \"address_or_null\": null, \"description\": \"A deep pothole that opened up in the middle of the road\", \"requested_action\": \"Dispatch pothole repair crew\"}",
+      "qlora_parsed": {
+        "category": "pothole",
+        "department": "Public Works",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A deep pothole that opened up in the middle of the road",
+        "requested_action": "Dispatch pothole repair crew"
+      },
+      "dpo_raw_output": "{\"category\": \"pothole\", \"department\": \"Public Works\", \"priority\": \"medium\", \"address_or_null\": null, \"description\": \"A deep pothole that opened up in the middle of the road\", \"requested_action\": \"Dispatch pothole repair crew\"}",
+      "dpo_parsed": {
+        "category": "pothole",
+        "department": "Public Works",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A deep pothole that opened up in the middle of the road",
+        "requested_action": "Dispatch pothole repair crew"
+      }
+    },
+    {
+      "test_index": 4,
+      "complaint": "calling to report an emergency, please send someone out immediately -- there's a neighbor blasting music late into the night somewhere near my block",
+      "gold": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "high",
+        "address_or_null": null,
+        "description": "A neighbor blasting music late into the night",
+        "requested_action": "Send officer to assess noise violation"
+      },
+      "base_raw_output": "{\"category\": \"emergency\", \"department\": \"311\", \"priority\": \"high\", \"address_or_null\": \"no address provided\", \"description\": \"neighbor is playing loud music at night near my block\", \"requested_action\": \"send someone out immediately\"}",
+      "base_parsed": {
+        "category": "emergency",
+        "department": "311",
+        "priority": "high",
+        "address_or_null": "no address provided",
+        "description": "neighbor is playing loud music at night near my block",
+        "requested_action": "send someone out immediately"
+      },
+      "qlora_raw_output": "{\"category\": \"noise_complaint\", \"department\": \"Code Enforcement\", \"priority\": \"high\", \"address_or_null\": null, \"description\": \"A neighbor blasting music late into the night\", \"requested_action\": \"Send officer to assess noise violation\"}",
+      "qlora_parsed": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "high",
+        "address_or_null": null,
+        "description": "A neighbor blasting music late into the night",
+        "requested_action": "Send officer to assess noise violation"
+      },
+      "dpo_raw_output": "{\"category\": \"noise_complaint\", \"department\": \"Code Enforcement\", \"priority\": \"high\", \"address_or_null\": null, \"description\": \"A neighbor blasting music late into the night\", \"requested_action\": \"Send officer to assess noise violation\"}",
+      "dpo_parsed": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "high",
+        "address_or_null": null,
+        "description": "A neighbor blasting music late into the night",
+        "requested_action": "Send officer to assess noise violation"
+      }
+    },
+    {
+      "test_index": 8,
+      "complaint": "hi there, whenever someone gets a chance to look into it -- there's a stray dog wandering around aggressively somewhere nearby, i forgot the street name, it's been like this for 10 days",
+      "gold": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      },
+      "base_raw_output": "{\n  \"category\": \"general\",\n  \"department\": \"police\",\n  \"priority\": \"high\",\n  \"address_or_null\": \"\",\n  \"description\": \"A stray dog has been aggressive in a neighborhood for over a month without any signs of treatment.\",\n  \"requested_action\": \"contact local animal control authorities\"\n}",
+      "base_parsed": {
+        "category": "general",
+        "department": "police",
+        "priority": "high",
+        "address_or_null": "",
+        "description": "A stray dog has been aggressive in a neighborhood for over a month without any signs of treatment.",
+        "requested_action": "contact local animal control authorities"
+      },
+      "qlora_raw_output": "{\"category\": \"animal_control\", \"department\": \"Animal Control\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"A stray dog wandering around aggressively\", \"requested_action\": \"Dispatch animal control officer\"}",
+      "qlora_parsed": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      },
+      "dpo_raw_output": "{\"category\": \"animal_control\", \"department\": \"Animal Control\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"A stray dog wandering around aggressively\", \"requested_action\": \"Dispatch animal control officer\"}",
+      "dpo_parsed": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      }
+    },
+    {
+      "test_index": 12,
+      "complaint": "hello, there's a stray dog wandering around aggressively somewhere near my block no rush on this one",
+      "gold": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      },
+      "base_raw_output": "{\n  \"category\": \"general\",\n  \"department\": \"police\",\n  \"priority\": \"high\",\n  \"address_or_null\": \"no address provided\",\n  \"description\": \"A stray dog is aggressively attacking another animal in proximity to your block.\",\n  \"requested_action\": \"contact local animal control authorities\"\n}",
+      "base_parsed": {
+        "category": "general",
+        "department": "police",
+        "priority": "high",
+        "address_or_null": "no address provided",
+        "description": "A stray dog is aggressively attacking another animal in proximity to your block.",
+        "requested_action": "contact local animal control authorities"
+      },
+      "qlora_raw_output": "{\"category\": \"animal_control\", \"department\": \"Animal Control\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"A stray dog wandering around aggressively\", \"requested_action\": \"Dispatch animal control officer\"}",
+      "qlora_parsed": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      },
+      "dpo_raw_output": "{\"category\": \"animal_control\", \"department\": \"Animal Control\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"A stray dog wandering around aggressively\", \"requested_action\": \"Dispatch animal control officer\"}",
+      "dpo_parsed": {
+        "category": "animal_control",
+        "department": "Animal Control",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A stray dog wandering around aggressively",
+        "requested_action": "Dispatch animal control officer"
+      }
+    },
+    {
+      "test_index": 20,
+      "complaint": "not sure who else to tell, there's a burst water main flooding the road around my neighborhood, it's been like this for 14 days. would appreciate someone looking into it soon",
+      "gold": {
+        "category": "water_leak",
+        "department": "Water Utility",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A burst water main flooding the road",
+        "requested_action": "Dispatch emergency water crew"
+      },
+      "base_raw_output": "{\"category\": \"general\", \"department\": \"311\", \"priority\": \"high\", \"address_or_null\": \"no address provided\", \"description\": \"a burst water main has been flooding the road around my neighborhood for 14 days without any indication of an emergency\", \"requested_action\": \"contact local authorities immediately\"}",
+      "base_parsed": {
+        "category": "general",
+        "department": "311",
+        "priority": "high",
+        "address_or_null": "no address provided",
+        "description": "a burst water main has been flooding the road around my neighborhood for 14 days without any indication of an emergency",
+        "requested_action": "contact local authorities immediately"
+      },
+      "qlora_raw_output": "{\"category\": \"water_leak\", \"department\": \"Water Utility\", \"priority\": \"medium\", \"address_or_null\": null, \"description\": \"A burst water main flooding the road\", \"requested_action\": \"Dispatch emergency water crew\"}",
+      "qlora_parsed": {
+        "category": "water_leak",
+        "department": "Water Utility",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A burst water main flooding the road",
+        "requested_action": "Dispatch emergency water crew"
+      },
+      "dpo_raw_output": "{\"category\": \"water_leak\", \"department\": \"Water Utility\", \"priority\": \"medium\", \"address_or_null\": null, \"description\": \"A burst water main flooding the road\", \"requested_action\": \"Dispatch emergency water crew\"}",
+      "dpo_parsed": {
+        "category": "water_leak",
+        "department": "Water Utility",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "A burst water main flooding the road",
+        "requested_action": "Dispatch emergency water crew"
+      }
+    },
+    {
+      "test_index": 0,
+      "complaint": "wanted to report an issue, please take care of this when you can -- there's constant loud noise coming from a nearby apartment over by Grant Ave",
+      "gold": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "medium",
+        "address_or_null": "Grant Ave",
+        "description": "Constant loud noise coming from a nearby apartment",
+        "requested_action": "Send officer to assess noise violation"
+      },
+      "base_raw_output": "{\"category\": \"report\", \"department\": \"311\", \"priority\": \"high\", \"address_or_null\": \"Grant Ave\", \"description\": \"There is a loud noise coming from a nearby apartment over by Grant Ave that I want to report as it is causing disturbance in my home.\", \"requested_action\": \"contact the local authorities immediately\"}",
+      "base_parsed": {
+        "category": "report",
+        "department": "311",
+        "priority": "high",
+        "address_or_null": "Grant Ave",
+        "description": "There is a loud noise coming from a nearby apartment over by Grant Ave that I want to report as it is causing disturbance in my home.",
+        "requested_action": "contact the local authorities immediately"
+      },
+      "qlora_raw_output": "{\"category\": \"noise_complaint\", \"department\": \"Code Enforcement\", \"priority\": \"medium\", \"address_or_null\": \"Grant Ave\", \"description\": \"Constant loud noise coming from a nearby apartment\", \"requested_action\": \"Send officer to assess noise violation\"}",
+      "qlora_parsed": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "medium",
+        "address_or_null": "Grant Ave",
+        "description": "Constant loud noise coming from a nearby apartment",
+        "requested_action": "Send officer to assess noise violation"
+      },
+      "dpo_raw_output": "{\"category\": \"noise_complaint\", \"department\": \"Code Enforcement\", \"priority\": \"medium\", \"address_or_null\": null, \"description\": \"Constant loud noise coming from a nearby apartment\", \"requested_action\": \"Send officer to assess noise violation\"}",
+      "dpo_parsed": {
+        "category": "noise_complaint",
+        "department": "Code Enforcement",
+        "priority": "medium",
+        "address_or_null": null,
+        "description": "Constant loud noise coming from a nearby apartment",
+        "requested_action": "Send officer to assess noise violation"
+      }
+    },
+    {
+      "test_index": 1,
+      "complaint": "no big deal, but, there's a bunch of construction debris someone dumped on Harbor Dr. not urgent, just wanted it on record",
+      "gold": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": "low",
+        "address_or_null": "Harbor Dr",
+        "description": "A bunch of construction debris someone dumped",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      },
+      "base_raw_output": "{\"category\": \"none\", \"department\": \"311\", \"priority\": \"low\", \"address_or_null\": \"Harbor Dr.\", \"description\": \"There is a pile of construction debris on Harbor Dr., which is not urgent. We recorded it as a nuisance to the public.\", \"requested_action\": \"record observation\"}",
+      "base_parsed": {
+        "category": "none",
+        "department": "311",
+        "priority": "low",
+        "address_or_null": "Harbor Dr.",
+        "description": "There is a pile of construction debris on Harbor Dr., which is not urgent. We recorded it as a nuisance to the public.",
+        "requested_action": "record observation"
+      },
+      "qlora_raw_output": "{\"category\": \"illegal_dumping\", \"department\": \"Sanitation\", \"priority\": \"low\", \"address_or_null\": \"Harbor Dr\", \"description\": \"A bunch of construction debris someone dumped\", \"requested_action\": \"Dispatch cleanup crew and investigate\"}",
+      "qlora_parsed": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": "low",
+        "address_or_null": "Harbor Dr",
+        "description": "A bunch of construction debris someone dumped",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      },
+      "dpo_raw_output": "{\"category\": \"illegal_dumping\", \"department\": \"Sanitation\", \"priority\": null, \"address_or_null\": null, \"description\": \"A bunch of construction debris someone dumped\", \"requested_action\": \"Dispatch cleanup crew and investigate\"}",
+      "dpo_parsed": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": null,
+        "address_or_null": null,
+        "description": "A bunch of construction debris someone dumped",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      }
+    },
+    {
+      "test_index": 3,
+      "complaint": "hi there, no rush on this one -- there's a broken streetlight leaving the block dark at night over by Oak St, it's been like this for 2 days",
+      "gold": {
+        "category": "streetlight_outage",
+        "department": "Public Works",
+        "priority": "low",
+        "address_or_null": "Oak St",
+        "description": "A broken streetlight leaving the block dark at night",
+        "requested_action": "Dispatch electrician to repair streetlight"
+      },
+      "base_raw_output": "{\n  \"category\": \"street lighting\",\n  \"department\": \"city hall\",\n  \"priority\": \"high\",\n  \"address_or_null\": \"Oak St\",\n  \"description\": \"A streetlight in Oak St has been left out due to a broken light fixture, causing darkness over the block at night.\",\n  \"requested_action\": \"contact city hall staff\"\n}",
+      "base_parsed": {
+        "category": "street lighting",
+        "department": "city hall",
+        "priority": "high",
+        "address_or_null": "Oak St",
+        "description": "A streetlight in Oak St has been left out due to a broken light fixture, causing darkness over the block at night.",
+        "requested_action": "contact city hall staff"
+      },
+      "qlora_raw_output": "{\"category\": \"streetlight_outage\", \"department\": \"Public Works\", \"priority\": \"low\", \"address_or_null\": \"Oak St\", \"description\": \"A broken streetlight leaving the block dark at night\", \"requested_action\": \"Dispatch electrician to repair streetlight\"}",
+      "qlora_parsed": {
+        "category": "streetlight_outage",
+        "department": "Public Works",
+        "priority": "low",
+        "address_or_null": "Oak St",
+        "description": "A broken streetlight leaving the block dark at night",
+        "requested_action": "Dispatch electrician to repair streetlight"
+      },
+      "dpo_raw_output": "{\"category\": \"streetlight_outage\", \"department\": \"Public Works\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"A broken streetlight leaving the block dark at night\", \"requested_action\": \"Dispatch electrician to repair streetlight\"}",
+      "dpo_parsed": {
+        "category": "streetlight_outage",
+        "department": "Public Works",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "A broken streetlight leaving the block dark at night",
+        "requested_action": "Dispatch electrician to repair streetlight"
+      }
+    },
+    {
+      "test_index": 5,
+      "complaint": "whenever you get a chance, figured i'd mention it, no big deal -- there's trash that hasn't been picked up in over a week near Union Blvd, it's been like this for 3 days",
+      "gold": {
+        "category": "missed_trash_pickup",
+        "department": "Sanitation",
+        "priority": "low",
+        "address_or_null": "Union Blvd",
+        "description": "Trash that hasn't been picked up in over a week",
+        "requested_action": "Schedule makeup collection"
+      },
+      "base_raw_output": "{\n  \"category\": \"general\",\n  \"department\": \"311\",\n  \"priority\": \"high\",\n  \"address_or_null\": \"Union Blvd\",\n  \"description\": \"Trash has not been collected in over a week near Union Blvd, resulting in a significant amount of waste accumulation.\",\n  \"requested_action\": \"contact local authorities to address the issue\"\n}",
+      "base_parsed": {
+        "category": "general",
+        "department": "311",
+        "priority": "high",
+        "address_or_null": "Union Blvd",
+        "description": "Trash has not been collected in over a week near Union Blvd, resulting in a significant amount of waste accumulation.",
+        "requested_action": "contact local authorities to address the issue"
+      },
+      "qlora_raw_output": "{\"category\": \"missed_trash_pickup\", \"department\": \"Sanitation\", \"priority\": \"low\", \"address_or_null\": \"Union Blvd\", \"description\": \"Trash that hasn't been picked up in over a week\", \"requested_action\": \"Schedule makeup collection\"}",
+      "qlora_parsed": {
+        "category": "missed_trash_pickup",
+        "department": "Sanitation",
+        "priority": "low",
+        "address_or_null": "Union Blvd",
+        "description": "Trash that hasn't been picked up in over a week",
+        "requested_action": "Schedule makeup collection"
+      },
+      "dpo_raw_output": "{\"category\": \"missed_trash_pickup\", \"department\": \"Sanitation\", \"priority\": \"low\", \"address_or_null\": null, \"description\": \"Trash that hasn't been picked up in over a week\", \"requested_action\": \"Schedule makeup collection\"}",
+      "dpo_parsed": {
+        "category": "missed_trash_pickup",
+        "department": "Sanitation",
+        "priority": "low",
+        "address_or_null": null,
+        "description": "Trash that hasn't been picked up in over a week",
+        "requested_action": "Schedule makeup collection"
+      }
+    },
+    {
+      "test_index": 6,
+      "complaint": "please help, this can't wait, please respond urgently -- there's a pile of dumped furniture and trash by Grant Ave",
+      "gold": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": "high",
+        "address_or_null": "Grant Ave",
+        "description": "A pile of dumped furniture and trash",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      },
+      "base_raw_output": "{\"category\": \"emergency\", \"department\": \"311\", \"priority\": \"high\", \"address_or_null\": \"Grant Ave\", \"description\": \"Please respond urgently -- there's a pile of dumped furniture and trash by Grant Ave.\", \"requested_action\": \"contact local waste management agency for assistance\"}",
+      "base_parsed": {
+        "category": "emergency",
+        "department": "311",
+        "priority": "high",
+        "address_or_null": "Grant Ave",
+        "description": "Please respond urgently -- there's a pile of dumped furniture and trash by Grant Ave.",
+        "requested_action": "contact local waste management agency for assistance"
+      },
+      "qlora_raw_output": "{\"category\": \"illegal_dumping\", \"department\": \"Sanitation\", \"priority\": \"high\", \"address_or_null\": \"Grant Ave\", \"description\": \"A pile of dumped furniture and trash\", \"requested_action\": \"Dispatch cleanup crew and investigate\"}",
+      "qlora_parsed": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": "high",
+        "address_or_null": "Grant Ave",
+        "description": "A pile of dumped furniture and trash",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      },
+      "dpo_raw_output": "{\"category\": \"illegal_dumping\", \"department\": \"Sanitation\", \"priority\": \"high\", \"address_or_null\": null, \"description\": \"A pile of dumped furniture and trash\", \"requested_action\": \"Dispatch cleanup crew and investigate\"}",
+      "dpo_parsed": {
+        "category": "illegal_dumping",
+        "department": "Sanitation",
+        "priority": "high",
+        "address_or_null": null,
+        "description": "A pile of dumped furniture and trash",
+        "requested_action": "Dispatch cleanup crew and investigate"
+      }
+    }
+  ],
+  "metrics": {
+    "base": {
+      "tag": "base",
+      "n": 10,
+      "json_valid_rate": 1.0,
+      "field_complete_rate": 1.0,
+      "category_accuracy": 0.0,
+      "address_exact_match_accuracy": 0.4,
+      "n_null_address_examples": 5,
+      "missing_address_accuracy": 0.0,
+      "hallucinated_address_count": 5,
+      "n_addressed_control_examples": 5,
+      "addressed_control_accuracy": 0.8
+    },
+    "qlora": {
+      "tag": "qlora",
+      "n": 10,
+      "json_valid_rate": 1.0,
+      "field_complete_rate": 1.0,
+      "category_accuracy": 1.0,
+      "address_exact_match_accuracy": 1.0,
+      "n_null_address_examples": 5,
+      "missing_address_accuracy": 1.0,
+      "hallucinated_address_count": 0,
+      "n_addressed_control_examples": 5,
+      "addressed_control_accuracy": 1.0
+    },
+    "dpo": {
+      "tag": "dpo",
+      "n": 10,
+      "json_valid_rate": 1.0,
+      "field_complete_rate": 1.0,
+      "category_accuracy": 1.0,
+      "address_exact_match_accuracy": 0.5,
+      "n_null_address_examples": 5,
+      "missing_address_accuracy": 1.0,
+      "hallucinated_address_count": 0,
+      "n_addressed_control_examples": 5,
+      "addressed_control_accuracy": 0.0
+    }
+  }
+}

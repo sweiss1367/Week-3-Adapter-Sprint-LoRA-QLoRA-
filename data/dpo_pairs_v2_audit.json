@@ -34,9 +34,37 @@
     "max": 268
   },
   "pct_pairs_differing_by_more_than_15pct_chars": 0.0,
-  "prompt_tokens": null,
-  "prompt_plus_chosen_tokens": null,
-  "prompt_plus_rejected_tokens": null,
-  "max_length_check": null,
-  "token_length_note": "Real Qwen tokenizer unavailable in this run -- character-length statistics above are not a substitute for token counts, and the max_length=256 check could not be run here. Rerun in Colab for real token-length numbers and the real max_length check."
+  "prompt_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 122,
+    "median": 138.0,
+    "p90": 145.1,
+    "p95": 148.0,
+    "max": 156
+  },
+  "prompt_plus_chosen_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 172,
+    "median": 192.5,
+    "p90": 203.0,
+    "p95": 206.5,
+    "max": 215
+  },
+  "prompt_plus_rejected_tokens": {
+    "unit": "tokens",
+    "n": 150,
+    "min": 170,
+    "median": 193.0,
+    "p90": 203.1,
+    "p95": 206.0,
+    "max": 218
+  },
+  "max_length_check": {
+    "max_length": 256,
+    "n_prompt_plus_chosen_exceeding": 0,
+    "n_prompt_plus_rejected_exceeding": 0,
+    "all_within_max_length": true
+  }
 }

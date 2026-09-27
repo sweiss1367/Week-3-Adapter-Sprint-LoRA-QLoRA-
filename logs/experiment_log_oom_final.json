@@ -1,0 +1,29 @@
+[
+  {
+    "stage": "deliberate_oom_attempt",
+    "status": "failed",
+    "exception_type": "OutOfMemoryError",
+    "wall_time_sec": 0.9,
+    "avg_step_time_sec": null,
+    "config": {
+      "batch_size": 32,
+      "seq_len": 1024,
+      "gradient_checkpointing": false
+    },
+    "peak_allocated_gb": 12.855,
+    "peak_reserved_gb": 13.883
+  },
+  {
+    "stage": "post_fix_step",
+    "status": "success",
+    "wall_time_sec": 3.3,
+    "avg_step_time_sec": null,
+    "config": {
+      "batch_size": 4,
+      "seq_len": 1024,
+      "gradient_checkpointing": true
+    },
+    "peak_allocated_gb": 11.1,
+    "peak_reserved_gb": 11.927
+  }
+]
