@@ -1,15 +1,9 @@
 {
-  "n_pairs": 165,
-  "n_no_address_source_examples": 42,
-  "n_no_address_pairs_included": 42,
+  "design": "controlled single-signal missing-address dataset (replaces the earlier mixed-corruption set)",
+  "n_pairs": 150,
   "corruption_type_counts": {
-    "hallucinate_address": 42,
-    "wrong_address": 26,
-    "malformed_json": 37,
-    "wrong_category": 23,
-    "drop_field": 37
+    "hallucinate_address": 150
   },
-  "source_data": "../data/sft_train.jsonl",
-  "held_out_data_checked": "../data/sft_test.jsonl",
-  "held_out_leakage_found": 0
+  "seed": 101,
+  "excluded_complaints_checked": 360
 }

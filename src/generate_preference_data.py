@@ -1,4 +1,14 @@
 """
+SUPERSEDED -- kept for reference only. This mixed-corruption design was rejected on
+manual review: mixing hallucinate_address with malformed_json/drop_field/wrong_category/
+wrong_address gives DPO several confounded preference signals at once, and
+audit_preference_data.py found that three of the five corruption types had a
+consistent-sign chosen/rejected length delta across every example of that type -- a
+length-based shortcut DPO could exploit instead of learning content. The dataset
+currently used for DPO training (data/dpo_pairs.jsonl) is built by
+generate_address_dpo_data.py instead, which isolates missing-address hallucination as the
+only signal. See the README for the full rationale.
+
 Builds the chosen/rejected preference dataset for DPO from the SFT instruction data.
 
 Every `rejected` response is a rule-based corruption of the correct ticket -- a realistic

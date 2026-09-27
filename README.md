@@ -26,8 +26,10 @@ configured precision is `bf16` on a GPU that doesn't support it.
 src/
   generate_instruction_data.py  synthetic complaint -> ticket generator (offline, no API calls)
   audit_instruction_data.py     token-length audit; run BEFORE choosing max_seq_len
-  generate_preference_data.py   chosen/rejected pairs for DPO, incl. address-hallucination pairs
-  audit_preference_data.py      preference-dataset audit; run BEFORE DPO training
+  generate_preference_data.py   SUPERSEDED mixed-corruption DPO generator -- kept for reference only, not used to build the current data/dpo_pairs.jsonl (see below)
+  audit_preference_data.py      generic multi-corruption preference-dataset audit (for the superseded design)
+  generate_address_dpo_data.py  CURRENT DPO generator -- controlled, single-signal missing-address dataset
+  audit_address_dpo_data.py     CURRENT preference-dataset audit; run BEFORE DPO training
   train_qlora.py                QLoRA SFT + the deliberate OOM demonstration and its fix
   train_dpo.py                  DPO with a frozen-adapter reference (see below)
   evaluate.py                   generation + scoring for base / QLoRA / DPO on held-out data
@@ -80,23 +82,26 @@ for each rubric area instead of a notebook cell).
   model/optimizer/batch, runs `gc.collect()` and `torch.cuda.empty_cache()`, then loads an entirely
   new base model and a new adapter for the safe rerun — the recovery run never resumes a base model
   that `prepare_model_for_kbit_training`/`get_peft_model` already mutated during the failed attempt.
-- **Missing-address behavior**: ~15% of generated complaints never mention a street
-  (`address_or_null: null` in the ground truth). `generate_preference_data.py` gives **every** such
-  training example (42 of 280, not a sampled subset) a `hallucinate_address` rejection (chosen
-  preserves `null`, rejected invents a street), so the DPO signal for "don't invent an address" is
-  fully represented rather than diluted. `evaluate.py` reports `address_null_precision` /
-  `address_null_recall` specifically for this.
-- **Preference dataset audit** (`src/audit_preference_data.py`, run against `data/dpo_pairs.jsonl`
-  before DPO training): 165 pairs, 42 (25.45%) `hallucinate_address`, 0 leakage into
-  `data/sft_test.jsonl`, 0 instances of an invented address accidentally already appearing in its
-  source complaint. One real finding worth flagging rather than silently accepting: `malformed_json`
-  and `drop_field` rejections are *always* shorter than `chosen` (by a consistent 1 char and ~35
-  chars respectively), and `hallucinate_address` rejections are consistently longer (~7 chars) --
-  three of five corruption types have a same-sign length delta across every example of that type,
-  which is a length-based shortcut DPO could exploit instead of learning the actual content
-  distinction. Not fixed in this pass (per instruction, this dataset is for review, not retraining
-  yet) -- worth revisiting if evaluation later shows the DPO model discriminating on response length
-  rather than on content.
+- **Missing-address behavior, and why the DPO dataset was rewritten**: the first DPO preference
+  dataset (`generate_preference_data.py`, now superseded) mixed `hallucinate_address` pairs with
+  `malformed_json`, `drop_field`, `wrong_category`, and `wrong_address` corruptions. On manual review
+  this was rejected: mixing corruption types means DPO gets multiple, confounded preference signals
+  at once, and `src/audit_preference_data.py` found that three of the five corruption types had a
+  *consistent-sign* length delta between chosen/rejected across every example of that type
+  (`malformed_json` rejected always exactly 1 char shorter, `drop_field` rejected always ~35 chars
+  shorter, `hallucinate_address` rejected always ~7 chars longer) -- a length-based shortcut DPO
+  could exploit instead of learning content. The dataset was replaced with
+  `generate_address_dpo_data.py`: 150 freshly generated (not copied from any SFT split) no-address
+  complaints, each producing exactly one pair where `rejected` is byte-for-byte identical to `chosen`
+  except `address_or_null` (same category, department, priority, description, requested_action, JSON
+  key order). This isolates the missing-address signal completely -- there is no other way for DPO to
+  distinguish chosen from rejected in this dataset. `evaluate.py` reports `address_null_precision` /
+  `address_null_recall` to measure whether this transferred.
+- **Current preference-dataset audit** (`src/audit_address_dpo_data.py`, run against the current
+  `data/dpo_pairs.jsonl`): 150 pairs, 0 duplicate prompts, 0 overlap with `sft_train`/`sft_val`/
+  `sft_test`, 0 invented addresses leaking into their source complaint, 0 key-order violations, 0
+  non-address-field violations (i.e. every pair verified byte-for-byte identical outside
+  `address_or_null`), 0% of pairs differing by more than 15% in character length.
 
 ## How to run
 
@@ -105,7 +110,8 @@ top to bottom (see the notebook for the full per-section commentary):
 
 1. Generate the synthetic instruction dataset and run the token-length audit; review the
    recommendation and approve `max_seq_len` (writes it into both config files).
-2. Generate the preference dataset.
+2. Generate the preference dataset (`src/generate_address_dpo_data.py`) and audit it
+   (`src/audit_address_dpo_data.py`).
 3. Evaluate the base model on the held-out test split.
 4. Run QLoRA SFT (`src/train_qlora.py`).
 5. Run the deliberate OOM + diagnosis + fix (`src/train_qlora.py --run-oom-demo`).
@@ -126,12 +132,12 @@ is pre-filled, and the log starts as an empty list.
   - The real token-length audit (`src/audit_instruction_data.py`), run in Colab with the actual
     `Qwen/Qwen2.5-0.5B-Instruct` tokenizer — see `data/token_length_audit.json`. Human-approved;
     `max_seq_len: 256` is now set in `configs/qlora_config.json`.
-  - `generate_preference_data.py`, regenerated against the current (approved) `data/sft_train.jsonl`
-    — see `data/dpo_pairs.jsonl` / `data/dpo_pairs_summary.json`.
-  - `src/audit_preference_data.py` against the regenerated preference dataset — see
-    `data/dpo_pairs_audit.json`. Token-length statistics in that file are character-length only
-    (this container can't reach the Hub for the real tokenizer); rerun in Colab for real token
-    counts on the preference pairs specifically.
+  - `generate_address_dpo_data.py` — the controlled, single-signal missing-address DPO dataset (150
+    pairs, seed 101) — see `data/dpo_pairs.jsonl` / `data/dpo_pairs_summary.json`. This replaced an
+    earlier mixed-corruption dataset that was rejected on review (see above).
+  - `src/audit_address_dpo_data.py` against that dataset — see `data/dpo_pairs_audit.json`.
+    Token-length statistics in that file are character-length only (this container can't reach the
+    Hub for the real tokenizer); rerun in Colab for real token counts on the preference pairs.
 - **Requires Colab** (GPU, and/or Hugging Face Hub access this dev container's network policy
   denies): QLoRA training, the deliberate OOM, DPO, and evaluation. None of these have been executed
   yet, and `logs/experiment_log.json` is an empty list until they are — this repo does not contain
