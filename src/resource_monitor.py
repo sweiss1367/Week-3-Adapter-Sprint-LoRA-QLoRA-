@@ -48,6 +48,45 @@ class StepTimingCallback(TrainerCallback):
         return sum(self.step_times) / len(self.step_times)
 
 
+class GpuMemoryMonitorCallback(TrainerCallback):
+    """Attach to a Trainer's `callbacks=[...]` to print peak GPU memory periodically
+    during training and enforce a hard ceiling on peak allocated memory.
+
+    Reads CUDA's high-water marks (max_memory_allocated/max_memory_reserved) directly on
+    every optimizer step rather than tracking separate state, and never resets them --
+    profile_run() already resets peak stats once at the start of the measured run, so
+    this callback's readings stay consistent with the final peak_allocated_gb/
+    peak_reserved_gb that profile_run() reports for the whole run.
+
+    Reusable as-is for DPO training, not just QLoRA SFT.
+    """
+
+    def __init__(self, check_every_n_steps: int = 10, ceiling_gb: float = 14.0):
+        self.check_every_n_steps = check_every_n_steps
+        self.ceiling_gb = ceiling_gb
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if not _cuda_available():
+            return
+
+        step = state.global_step
+        peak_allocated_gb = torch.cuda.max_memory_allocated() / 1e9
+        peak_reserved_gb = torch.cuda.max_memory_reserved() / 1e9
+
+        if step % self.check_every_n_steps == 0:
+            print(
+                f"[gpu_memory] step={step} "
+                f"peak_allocated_gb={round(peak_allocated_gb, 3)} "
+                f"peak_reserved_gb={round(peak_reserved_gb, 3)}"
+            )
+
+        if peak_allocated_gb > self.ceiling_gb:
+            raise RuntimeError(
+                f"Peak allocated GPU memory {round(peak_allocated_gb, 3)}GB exceeded the "
+                f"{self.ceiling_gb}GB ceiling at optimizer step {step}."
+            )
+
+
 def _cuda_available() -> bool:
     return torch is not None and torch.cuda.is_available()
 

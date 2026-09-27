@@ -25,7 +25,7 @@ from transformers import (
 )
 
 from generate_instruction_data import build_chat_prompt, target_json
-from resource_monitor import StepTimingCallback, check_hardware, profile_run, resolve_precision
+from resource_monitor import GpuMemoryMonitorCallback, StepTimingCallback, check_hardware, profile_run, resolve_precision
 
 
 def load_config(path: str) -> dict:
@@ -229,6 +229,7 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
     validate_labels(train_ds, val_ds)
 
     step_timer = StepTimingCallback()
+    memory_monitor = GpuMemoryMonitorCallback(check_every_n_steps=10, ceiling_gb=14.0)
     args = build_training_args(cfg, os.path.join(out_dir, "sft_ckpt"))
 
     def do_train():
@@ -238,7 +239,7 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
             train_dataset=train_ds,
             eval_dataset=val_ds,
             data_collator=make_pad_collate(tokenizer),
-            callbacks=[step_timer],
+            callbacks=[step_timer, memory_monitor],
         )
         trainer.train()
         return trainer
