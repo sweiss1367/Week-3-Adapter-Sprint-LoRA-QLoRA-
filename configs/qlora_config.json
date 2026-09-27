@@ -1,7 +1,7 @@
 {
   "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
-  "max_seq_len": null,
-  "max_seq_len_status": "PENDING_AUDIT: run src/audit_instruction_data.py against data/sft_train.jsonl and get human approval before setting this value. Do not train with a guessed number.",
+  "max_seq_len": 256,
+  "max_seq_len_status": "APPROVED. Selected from the real Qwen/Qwen2.5-0.5B-Instruct tokenizer audit run in Google Colab against data/sft_train.jsonl (280 examples) -- see data/token_length_audit.json. Measured combined (prompt+target) token length: min 175, median 193, p90 204, p95 207, p99 211.2, max 214. 256 preserves all 280 training examples and their complete assistant target (0 truncated at 256, vs. 142/280 truncated at 192 and 280/280 at 128) with modest headroom over the true max of 214; 384 and 512 were rejected as adding activation-memory cost with no data-preservation benefit over 256. Human-approved before being set here.",
   "lora": {
     "r": 16,
     "alpha": 32,

@@ -1,0 +1,89 @@
+{
+  "source": "Measured in Google Colab with the real Qwen/Qwen2.5-0.5B-Instruct tokenizer via `python src/audit_instruction_data.py --data data/sft_train.jsonl --model Qwen/Qwen2.5-0.5B-Instruct`. These are not synthetic/smoke-test values.",
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "data_file": "data/sft_train.jsonl",
+  "n_examples": 280,
+  "prompt_tokens": {
+    "field": "prompt_tokens",
+    "n": 280,
+    "min": 123,
+    "median": 134.5,
+    "p90": 144,
+    "p95": 146,
+    "p99": 150,
+    "max": 151
+  },
+  "target_tokens": {
+    "field": "target_tokens",
+    "n": 280,
+    "min": 49,
+    "median": 57,
+    "p90": 63,
+    "p95": 64,
+    "p99": 65,
+    "max": 65
+  },
+  "combined_tokens": {
+    "field": "combined_tokens",
+    "n": 280,
+    "min": 175,
+    "median": 193,
+    "p90": 204,
+    "p95": 207,
+    "p99": 211.2,
+    "max": 214
+  },
+  "truncation_at_candidate_lengths": [
+    {
+      "max_seq_len": 128,
+      "n_truncated_any": 280,
+      "pct_truncated_any": 100.0,
+      "n_target_fully_lost": 232,
+      "note": "every truncated example loses part of its assistant target (the JSON gets cut, possibly before the closing brace or the EOS token) because the target is appended after the prompt and truncation cuts from the end"
+    },
+    {
+      "max_seq_len": 192,
+      "n_truncated_any": 142,
+      "pct_truncated_any": 50.71,
+      "n_target_fully_lost": 0,
+      "note": "every truncated example loses part of its assistant target (the JSON gets cut, possibly before the closing brace or the EOS token) because the target is appended after the prompt and truncation cuts from the end -- at this length the prompt alone never reaches 192 tokens, so the target is partially preserved but never fully lost"
+    },
+    {
+      "max_seq_len": 256,
+      "n_truncated_any": 0,
+      "pct_truncated_any": 0.0,
+      "n_target_fully_lost": 0,
+      "note": "no examples truncated at this length"
+    },
+    {
+      "max_seq_len": 384,
+      "n_truncated_any": 0,
+      "pct_truncated_any": 0.0,
+      "n_target_fully_lost": 0,
+      "note": "no examples truncated at this length"
+    },
+    {
+      "max_seq_len": 512,
+      "n_truncated_any": 0,
+      "pct_truncated_any": 0.0,
+      "n_target_fully_lost": 0,
+      "note": "no examples truncated at this length"
+    }
+  ],
+  "recommendation": {
+    "recommended_max_seq_len": 256,
+    "basis": "max",
+    "basis_value_tokens": 214.0,
+    "max_combined_length": 214,
+    "p99_combined_length": 211.2,
+    "outlier_ratio_max_over_p99": 1.01,
+    "n_truncated_at_recommended": 0,
+    "pct_truncated_at_recommended": 0.0,
+    "n_target_fully_lost_at_recommended": 0
+  },
+  "recommendation_rationale": "basis=max (214.0 tokens); recommended_max_seq_len=256 adds a 5% margin over the true maximum combined length and rounds up to the nearest multiple of 32. The max (214) is not a large outlier vs. p99 (211.2, ratio 1.01), so rounding up from the true max truncates zero examples and loses zero assistant targets -- there is no tradeoff to make at this dataset size. 384 and 512 were also measured at 0 truncated examples but were rejected because they add activation-memory cost with no data-preservation benefit over 256. Human-approved from the real Colab tokenizer run before being written into configs/qlora_config.json.",
+  "human_approval": {
+    "approved": true,
+    "approved_max_seq_len": 256
+  }
+}

@@ -1,10 +1,15 @@
 {
-  "n_pairs": 180,
+  "n_pairs": 165,
+  "n_no_address_source_examples": 42,
+  "n_no_address_pairs_included": 42,
   "corruption_type_counts": {
-    "drop_field": 44,
-    "wrong_category": 36,
-    "malformed_json": 32,
-    "wrong_address": 38,
-    "hallucinate_address": 30
-  }
+    "hallucinate_address": 42,
+    "wrong_address": 26,
+    "malformed_json": 37,
+    "wrong_category": 23,
+    "drop_field": 37
+  },
+  "source_data": "../data/sft_train.jsonl",
+  "held_out_data_checked": "../data/sft_test.jsonl",
+  "held_out_leakage_found": 0
 }

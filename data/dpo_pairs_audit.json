@@ -1,0 +1,83 @@
+{
+  "n_pairs": 165,
+  "corruption_type_counts": {
+    "hallucinate_address": 42,
+    "wrong_address": 26,
+    "malformed_json": 37,
+    "wrong_category": 23,
+    "drop_field": 37
+  },
+  "corruption_type_pct": {
+    "hallucinate_address": 25.45,
+    "wrong_address": 15.76,
+    "malformed_json": 22.42,
+    "wrong_category": 13.94,
+    "drop_field": 22.42
+  },
+  "n_hallucinate_address_pairs": 42,
+  "pct_hallucinate_address_pairs": 25.45,
+  "chosen_length_chars": {
+    "unit": "characters",
+    "n": 165,
+    "min": 206,
+    "median": 233,
+    "p90": 249.2,
+    "p95": 262.4,
+    "max": 270
+  },
+  "rejected_length_chars": {
+    "unit": "characters",
+    "n": 165,
+    "min": 167,
+    "median": 231,
+    "p90": 246.0,
+    "p95": 252.8,
+    "max": 269
+  },
+  "length_delta_chars": {
+    "unit": "characters",
+    "mean_chosen_minus_rejected": 5.9,
+    "pct_pairs_differing_by_more_than_15pct": 5.45,
+    "by_corruption_type": {
+      "hallucinate_address": {
+        "n": 42,
+        "mean_chosen_minus_rejected": -6.67,
+        "all_same_sign": true
+      },
+      "wrong_address": {
+        "n": 26,
+        "mean_chosen_minus_rejected": 0.08,
+        "all_same_sign": false
+      },
+      "malformed_json": {
+        "n": 37,
+        "mean_chosen_minus_rejected": 1,
+        "all_same_sign": true
+      },
+      "wrong_category": {
+        "n": 23,
+        "mean_chosen_minus_rejected": -3,
+        "all_same_sign": false
+      },
+      "drop_field": {
+        "n": 37,
+        "mean_chosen_minus_rejected": 34.68,
+        "all_same_sign": true
+      }
+    }
+  },
+  "chosen_length_tokens": null,
+  "rejected_length_tokens": null,
+  "length_delta_tokens": null,
+  "token_length_note": "Real Qwen tokenizer unavailable in this run -- only character-length statistics above are real measurements. Do not treat them as token counts; rerun in Colab for real token-length numbers.",
+  "address_leak_check": {
+    "n_hallucinate_address_pairs_checked": 42,
+    "n_leaks_found": 0,
+    "leaks": []
+  },
+  "held_out_overlap_check": {
+    "n_test_complaints": 50,
+    "n_dpo_prompts_found_in_test_set": 0,
+    "overlapping_prompts": []
+  }
+}

@@ -27,6 +27,7 @@ src/
   generate_instruction_data.py  synthetic complaint -> ticket generator (offline, no API calls)
   audit_instruction_data.py     token-length audit; run BEFORE choosing max_seq_len
   generate_preference_data.py   chosen/rejected pairs for DPO, incl. address-hallucination pairs
+  audit_preference_data.py      preference-dataset audit; run BEFORE DPO training
   train_qlora.py                QLoRA SFT + the deliberate OOM demonstration and its fix
   train_dpo.py                  DPO with a frozen-adapter reference (see below)
   evaluate.py                   generation + scoring for base / QLoRA / DPO on held-out data
@@ -52,11 +53,13 @@ for each rubric area instead of a notebook cell).
   `train_qlora.py` verifies these names against the model's actual linear layers at load time
   (`verify_target_modules`) and prints the exact trainable parameter count and percentage
   (`report_trainable_parameters`) so the choice can be defended with real numbers, not asserted.
-- **Sequence length**: `configs/qlora_config.json` has `max_seq_len: null` on purpose.
-  `src/audit_instruction_data.py` measures the real tokenized length distribution of the generated
-  data (prompt / target / combined, with p90/p95/p99) and computes a recommendation; a human
-  approves the value (the notebook's Section 2) before `train_qlora.py` — which refuses to run
-  while the value is still `null` — uses it.
+- **Sequence length: APPROVED, `max_seq_len: 256`**. Measured with the real
+  `Qwen/Qwen2.5-0.5B-Instruct` tokenizer in Colab against `data/sft_train.jsonl` (280 examples;
+  see `data/token_length_audit.json`): combined prompt+target length min 175 / median 193 / p90 204 /
+  p95 207 / p99 211.2 / max 214. 256 preserves all 280 training examples and their complete
+  assistant target (0 truncated at 256, vs. 142/280 at 192 and 280/280 at 128); 384 and 512 add
+  activation-memory cost with no data-preservation benefit over 256. Human-approved before being
+  written into `configs/qlora_config.json`.
 - **DPO reference policy**: the reference must represent the instruction-tuned adapter state
   immediately before DPO, not the untouched base model. `src/train_dpo.py` loads the SFT adapter
   twice onto one shared 4-bit base — `policy` (trainable) and `reference` (frozen right after
@@ -78,10 +81,22 @@ for each rubric area instead of a notebook cell).
   new base model and a new adapter for the safe rerun — the recovery run never resumes a base model
   that `prepare_model_for_kbit_training`/`get_peft_model` already mutated during the failed attempt.
 - **Missing-address behavior**: ~15% of generated complaints never mention a street
-  (`address_or_null: null` in the ground truth). `generate_preference_data.py` gives every one of
-  those a `hallucinate_address` rejection (chosen preserves `null`, rejected invents a street), so
-  the DPO signal for "don't invent an address" isn't diluted by the other corruption types.
-  `evaluate.py` reports `address_null_precision` / `address_null_recall` specifically for this.
+  (`address_or_null: null` in the ground truth). `generate_preference_data.py` gives **every** such
+  training example (42 of 280, not a sampled subset) a `hallucinate_address` rejection (chosen
+  preserves `null`, rejected invents a street), so the DPO signal for "don't invent an address" is
+  fully represented rather than diluted. `evaluate.py` reports `address_null_precision` /
+  `address_null_recall` specifically for this.
+- **Preference dataset audit** (`src/audit_preference_data.py`, run against `data/dpo_pairs.jsonl`
+  before DPO training): 165 pairs, 42 (25.45%) `hallucinate_address`, 0 leakage into
+  `data/sft_test.jsonl`, 0 instances of an invented address accidentally already appearing in its
+  source complaint. One real finding worth flagging rather than silently accepting: `malformed_json`
+  and `drop_field` rejections are *always* shorter than `chosen` (by a consistent 1 char and ~35
+  chars respectively), and `hallucinate_address` rejections are consistently longer (~7 chars) --
+  three of five corruption types have a same-sign length delta across every example of that type,
+  which is a length-based shortcut DPO could exploit instead of learning the actual content
+  distinction. Not fixed in this pass (per instruction, this dataset is for review, not retraining
+  yet) -- worth revisiting if evaluation later shows the DPO model discriminating on response length
+  rather than on content.
 
 ## How to run
 
@@ -105,17 +120,23 @@ is pre-filled, and the log starts as an empty list.
 
 ## What's already been run vs. what's pending
 
-- **Already run** (CPU-only, no GPU needed, outputs committed): `generate_instruction_data.py`.
-  See `data/generation_summary.json` for the real counts (360 examples, ~14% no-address, roughly
-  even split across low/medium/high priority).
-- **Requires Colab** (GPU and/or Hugging Face Hub access this dev container's network policy
-  denies): the token-length audit, QLoRA training, the deliberate OOM, DPO, and evaluation. None of
-  these have been executed yet, and `logs/experiment_log.json` is an empty list until they are —
-  this repo does not contain invented measurements.
-- **Pending review**: `data/dpo_pairs.jsonl` and `data/dpo_pairs_summary.json` were generated
-  against an earlier, provisional instruction dataset and have **not** been regenerated against the
-  current `data/sft_train.jsonl` — they're stale placeholders until the instruction dataset below is
-  reviewed and approved, per instruction.
+- **Already run** (CPU-only, no GPU needed, outputs committed):
+  - `generate_instruction_data.py` — see `data/generation_summary.json` (360 examples, 13.6%
+    no-address, 120/124/116 low/medium/high).
+  - The real token-length audit (`src/audit_instruction_data.py`), run in Colab with the actual
+    `Qwen/Qwen2.5-0.5B-Instruct` tokenizer — see `data/token_length_audit.json`. Human-approved;
+    `max_seq_len: 256` is now set in `configs/qlora_config.json`.
+  - `generate_preference_data.py`, regenerated against the current (approved) `data/sft_train.jsonl`
+    — see `data/dpo_pairs.jsonl` / `data/dpo_pairs_summary.json`.
+  - `src/audit_preference_data.py` against the regenerated preference dataset — see
+    `data/dpo_pairs_audit.json`. Token-length statistics in that file are character-length only
+    (this container can't reach the Hub for the real tokenizer); rerun in Colab for real token
+    counts on the preference pairs specifically.
+- **Requires Colab** (GPU, and/or Hugging Face Hub access this dev container's network policy
+  denies): QLoRA training, the deliberate OOM, DPO, and evaluation. None of these have been executed
+  yet, and `logs/experiment_log.json` is an empty list until they are — this repo does not contain
+  invented measurements. `configs/dpo_config.json`'s `max_length`/`max_prompt_length` are still
+  `null`, pending approval to derive them from `max_seq_len`.
 
 ### Note: the instruction dataset was regenerated after manual review
 
