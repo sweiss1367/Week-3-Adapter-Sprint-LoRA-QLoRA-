@@ -68,6 +68,12 @@ def cuda_peak_stats() -> dict:
     }
 
 
+def _avg_step_time(step_timer: Optional[StepTimingCallback]):
+    if step_timer is not None and step_timer.avg_step_time_sec is not None:
+        return round(step_timer.avg_step_time_sec, 4)
+    return None
+
+
 def profile_run(
     stage_name: str,
     fn: Callable,
@@ -82,28 +88,88 @@ def profile_run(
     seq len, lora rank, etc.) so the log is self-describing without cross-referencing code.
     `step_timer` should be the same StepTimingCallback instance passed into the Trainer
     that fn() drives, if any, so average step time gets captured alongside peak memory.
+
+    A run that raises (e.g. a genuine CUDA OOM) is logged too, before the exception is
+    re-raised: status="failed", the exception type, peak allocated/reserved memory at the
+    moment of failure, and the elapsed wall-clock time up to that point. avg_step_time_sec
+    stays null if no optimizer step completed before the failure -- never fabricated. The
+    caller is still responsible for writing the actual traceback to its own log file if it
+    wants one (this function only records numbers, not the traceback text).
     """
     reset_cuda_stats()
     t0 = time.time()
-    result = fn()
+    try:
+        result = fn()
+    except Exception as exc:
+        wall_time_sec = round(time.time() - t0, 1)
+        record = {
+            "stage": stage_name,
+            "status": "failed",
+            "exception_type": type(exc).__name__,
+            "wall_time_sec": wall_time_sec,
+            "avg_step_time_sec": _avg_step_time(step_timer),
+            "config": config or {},
+        }
+        record.update(cuda_peak_stats())
+        log_experiment(record, log_path)
+        print(f"[{stage_name}] FAILED: {record}")
+        raise
+
     if _cuda_available():
         torch.cuda.synchronize()
     wall_time_sec = round(time.time() - t0, 1)
 
     record = {
         "stage": stage_name,
+        "status": "success",
         "wall_time_sec": wall_time_sec,
-        "avg_step_time_sec": (
-            round(step_timer.avg_step_time_sec, 4)
-            if step_timer is not None and step_timer.avg_step_time_sec is not None
-            else None
-        ),
+        "avg_step_time_sec": _avg_step_time(step_timer),
         "config": config or {},
     }
     record.update(cuda_peak_stats())
     log_experiment(record, log_path)
     print(f"[{stage_name}] {record}")
     return result, record
+
+
+def resolve_precision(training_cfg: dict) -> str:
+    """fp16 takes priority if both are somehow set; falls back to fp32 if neither is."""
+    if training_cfg.get("fp16"):
+        return "fp16"
+    if training_cfg.get("bf16"):
+        return "bf16"
+    return "fp32"
+
+
+def check_hardware(expected_precision: str):
+    """
+    Prints the detected GPU, its CUDA compute capability, whether this GPU supports
+    bf16 (torch.cuda.is_bf16_supported()), and the precision this run is configured to
+    use. Fails clearly (SystemExit) if the configured precision cannot run on the
+    detected GPU -- in particular, the T4 required by this assignment has no native
+    bf16 support, so a bf16-configured run must not silently proceed on it.
+    """
+    if not _cuda_available():
+        raise SystemExit("No CUDA GPU detected. This project requires a GPU runtime (e.g. a Colab T4).")
+
+    name = torch.cuda.get_device_name(0)
+    major, minor = torch.cuda.get_device_capability(0)
+    bf16_supported = torch.cuda.is_bf16_supported()
+
+    print(f"GPU: {name}")
+    print(f"CUDA capability: {major}.{minor}")
+    print(f"torch.cuda.is_bf16_supported(): {bf16_supported}")
+    print(f"Selected training precision: {expected_precision}")
+
+    if expected_precision == "bf16" and not bf16_supported:
+        raise SystemExit(
+            f"Configured precision is bf16, but '{name}' does not support it "
+            "(torch.cuda.is_bf16_supported() is False). The T4 this project targets has "
+            "no native bf16 support -- set fp16: true and bf16: false in the config "
+            "instead of proceeding on an incompatible precision."
+        )
+
+    print("Hardware check passed.")
 
 
 def log_experiment(record: dict, log_path: str = "logs/experiment_log.json"):

@@ -17,7 +17,8 @@
   "quantization": {
     "load_in_4bit": true,
     "bnb_4bit_quant_type": "nf4",
-    "bnb_4bit_compute_dtype": "bfloat16",
+    "bnb_4bit_compute_dtype": "float16",
+    "bnb_4bit_compute_dtype_status": "The NVIDIA T4 has no native bf16 support -- float16 is required here, not a stylistic choice. src/resource_monitor.check_hardware() verifies this against the detected GPU at startup.",
     "bnb_4bit_use_double_quant": true
   },
   "training": {
@@ -29,7 +30,8 @@
     "warmup_ratio": 0.03,
     "max_grad_norm": 0.3,
     "optim": "paged_adamw_8bit",
-    "bf16": true,
+    "bf16": false,
+    "fp16": true,
     "gradient_checkpointing": true,
     "seed": 42
   },

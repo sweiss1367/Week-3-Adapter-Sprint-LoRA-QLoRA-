@@ -37,41 +37,102 @@ STREETS = [
     "Lincoln Ave", "Cedar Ln", "Franklin St", "Riverside Dr", "Oak St", "Grant Ave",
 ]
 
+# Each category has multiple noun-phrase variants (no leading article baked in twice --
+# these are the object of "there's"/"there is", e.g. "there's a huge pothole...",
+# "there's trash that hasn't been picked up...", "there's graffiti covering...").
 ISSUE_PHRASES = {
-    "pothole": "a huge pothole thats gonna wreck someones tire",
-    "missed_trash_pickup": "my trash wasnt picked up again this week",
-    "illegal_dumping": "someone dumped a bunch of furniture and trash",
-    "noise_complaint": "the neighbors have had a party blasting music since last night",
-    "water_leak": "water just gushing out of a pipe in the street",
-    "graffiti": "graffiti all over the wall of the building",
-    "downed_tree": "a big tree branch fell and its blocking the sidewalk",
-    "abandoned_vehicle": "a car with no plates thats been sitting there for weeks",
-    "streetlight_outage": "the streetlight has been out and its pitch black at night",
-    "animal_control": "a stray dog thats been wandering around aggressively",
+    "pothole": [
+        "a huge pothole that's going to wreck someone's tire",
+        "a deep pothole that opened up in the middle of the road",
+    ],
+    "missed_trash_pickup": [
+        "trash that hasn't been picked up in over a week",
+        "garbage still sitting out from the last two collection days",
+    ],
+    "illegal_dumping": [
+        "a pile of dumped furniture and trash",
+        "a bunch of construction debris someone dumped",
+    ],
+    "noise_complaint": [
+        "a neighbor blasting music late into the night",
+        "constant loud noise coming from a nearby apartment",
+    ],
+    "water_leak": [
+        "water gushing out of a broken pipe in the street",
+        "a burst water main flooding the road",
+    ],
+    "graffiti": [
+        "graffiti covering the wall of a building",
+        "fresh spray paint tags all over a storefront",
+    ],
+    "downed_tree": [
+        "a fallen tree branch blocking the sidewalk",
+        "a large tree limb that came down after the wind",
+    ],
+    "abandoned_vehicle": [
+        "an abandoned car with no license plates",
+        "a car that's been parked in the same spot with flat tires for weeks",
+    ],
+    "streetlight_outage": [
+        "a streetlight that's been out for days",
+        "a broken streetlight leaving the block dark at night",
+    ],
+    "animal_control": [
+        "a stray dog wandering around aggressively",
+        "a loose dog that's been chasing people on the sidewalk",
+    ],
 }
 
-SEVERITY_WORDS = {
-    "low": ["whenever someone gets a chance", "not urgent but", "at some point"],
-    "medium": ["please take care of this soon", "this has been going on for a few days"],
-    "high": ["this is dangerous", "someone could get hurt", "please send someone ASAP"],
+# Opener + tone phrasing are keyed to the SAME priority tier so urgency language never
+# contradicts the assigned priority (the earlier generator picked these independently,
+# which could pair an "URGENT!!!" opener with a low-priority tone phrase).
+OPENERS = {
+    "low": [
+        "hi there,", "hello,", "just wanted to mention something,",
+        "no big deal, but,", "whenever you get a chance,",
+    ],
+    "medium": [
+        "hi,", "wanted to report an issue,", "following up on something,",
+        "not sure who else to tell,", "reaching out about a problem,",
+    ],
+    "high": [
+        "URGENT:", "please help,", "this needs attention right away,",
+        "calling to report an emergency,", "need help immediately,",
+    ],
 }
 
-# Templates that mention a specific street -- address_or_null will be filled in.
-ADDRESS_TEMPLATES = [
-    "hi there theres a {issue} on {street} near the corner its been like this for {days} days {sev}",
-    "URGENT!!! {issue} at {street}, {sev} can someone come out",
-    "not sure who to tell but {issue} by {street}. {sev}",
-    "so this is the third time im calling about {issue} on {street}... {sev} thanks",
-    "{issue} on {street} sorry for typos im on my phone. {sev}",
+TONE_PHRASES = {
+    "low": [
+        "whenever someone gets a chance to look into it",
+        "not urgent, just wanted it on record",
+        "no rush on this one",
+        "figured i'd mention it, no big deal",
+    ],
+    "medium": [
+        "this has been going on for a few days now",
+        "would appreciate someone looking into it soon",
+        "please take care of this when you can",
+        "hoping someone can check on it this week",
+    ],
+    "high": [
+        "this is dangerous and needs attention ASAP",
+        "someone could get hurt, please send help right away",
+        "this can't wait, please respond urgently",
+        "please send someone out immediately",
+    ],
+}
+
+# Inserted after the issue phrase when a street is given.
+ADDRESS_PHRASES = [
+    " on {street}", " near {street}", " by {street}", " over by {street}", " close to {street}",
 ]
 
-# Templates that never mention a street -- address_or_null must stay null for these.
-NO_ADDRESS_TEMPLATES = [
-    "hi theres a {issue} somewhere around my block, been like this for {days} days {sev}",
-    "URGENT!!! {issue} near my house, not sure of the exact address, {sev}",
-    "not sure who to tell but {issue} nearby, i dont know the street name {sev}",
-    "{issue}, sorry i dont know the address off the top of my head. {sev}",
-    "calling about {issue} in my neighborhood, forgot to check the street sign {sev}",
+# Inserted after the issue phrase when no street is given -- address_or_null stays null.
+NO_ADDRESS_PHRASES = [
+    " somewhere near my block", " around my neighborhood",
+    " near my house, i don't know the exact address",
+    " somewhere nearby, i forgot the street name",
+    " a couple blocks from my place, not sure of the address",
 ]
 
 NO_ADDRESS_RATE = 0.15
@@ -87,21 +148,32 @@ SYSTEM_PROMPT = (
 
 def make_example(rng: random.Random, force_no_address: bool = None):
     category = rng.choice(list(CATEGORIES.keys()))
-    days = rng.randint(1, 14)
     priority = rng.choice(["low", "medium", "high"])
-    sev_phrase = rng.choice(SEVERITY_WORDS[priority])
+    days = rng.randint(1, 14)
+
+    issue_phrase = rng.choice(ISSUE_PHRASES[category])
+    opener = rng.choice(OPENERS[priority])
+    tone = rng.choice(TONE_PHRASES[priority])
+    days_mention = rng.random() < 0.5
 
     no_address = rng.random() < NO_ADDRESS_RATE if force_no_address is None else force_no_address
-
     if no_address:
-        template = rng.choice(NO_ADDRESS_TEMPLATES)
-        complaint = template.format(issue=ISSUE_PHRASES[category], days=days, sev=sev_phrase)
+        location_phrase = rng.choice(NO_ADDRESS_PHRASES)
         address_or_null = None
     else:
         street = rng.choice(STREETS)
-        template = rng.choice(ADDRESS_TEMPLATES)
-        complaint = template.format(issue=ISSUE_PHRASES[category], street=street, days=days, sev=sev_phrase)
+        location_phrase = rng.choice(ADDRESS_PHRASES).format(street=street)
         address_or_null = street
+
+    days_clause = f", it's been like this for {days} days" if days_mention else ""
+    order = rng.choice(["issue_first", "tone_first"])
+    if order == "issue_first":
+        complaint = f"{opener} there's {issue_phrase}{location_phrase}{days_clause}. {tone}"
+    else:
+        complaint = f"{opener} {tone} -- there's {issue_phrase}{location_phrase}{days_clause}"
+
+    if rng.random() < 0.15:
+        complaint = complaint.replace(".", "")
 
     meta = CATEGORIES[category]
     ticket = {
@@ -109,7 +181,7 @@ def make_example(rng: random.Random, force_no_address: bool = None):
         "department": meta["department"],
         "priority": priority,
         "address_or_null": address_or_null,
-        "description": ISSUE_PHRASES[category][0].upper() + ISSUE_PHRASES[category][1:],
+        "description": issue_phrase[0].upper() + issue_phrase[1:],
         "requested_action": meta["action"],
     }
     return {"complaint": complaint, "ticket": ticket}
@@ -173,12 +245,18 @@ def main():
                 f.write(json.dumps(ex) + "\n")
 
     null_share = sum(1 for ex in all_examples if ex["ticket"]["address_or_null"] is None) / len(all_examples)
+    priority_counts = {}
+    for ex in all_examples:
+        p = ex["ticket"]["priority"]
+        priority_counts[p] = priority_counts.get(p, 0) + 1
+
     summary = {
         "total": len(all_examples),
         "train": len(train_examples),
         "val": len(val_examples),
         "test": len(test_examples),
         "no_address_share": round(null_share, 3),
+        "priority_counts": priority_counts,
         "seed": args.seed,
     }
     with open(os.path.join(args.out_dir, "generation_summary.json"), "w") as f:

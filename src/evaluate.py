@@ -25,6 +25,7 @@ from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from generate_instruction_data import build_chat_prompt
+from resource_monitor import check_hardware, resolve_precision
 
 REQUIRED_KEYS = {"category", "department", "priority", "address_or_null", "description", "requested_action"}
 
@@ -34,19 +35,26 @@ def load_jsonl(path):
         return [json.loads(line) for line in f]
 
 
-def load_model_for_eval(model_name: str, adapter_path: str = None):
+def load_model_for_eval(model_name: str, adapter_path: str = None, qlora_config_path: str = "configs/qlora_config.json"):
+    with open(qlora_config_path) as f:
+        qlora_cfg = json.load(f)
+    q = qlora_cfg["quantization"]
+    compute_dtype = getattr(torch, q["bnb_4bit_compute_dtype"])  # float16 on the T4 this project targets
+
+    check_hardware(resolve_precision(qlora_cfg["training"]))
+
     bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
+        load_in_4bit=q["load_in_4bit"],
+        bnb_4bit_quant_type=q["bnb_4bit_quant_type"],
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=q["bnb_4bit_use_double_quant"],
     )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, quantization_config=bnb_config, device_map={"": 0}, torch_dtype=torch.bfloat16,
+        model_name, quantization_config=bnb_config, device_map={"": 0}, torch_dtype=compute_dtype,
     )
     if adapter_path:
         model = PeftModel.from_pretrained(model, adapter_path)

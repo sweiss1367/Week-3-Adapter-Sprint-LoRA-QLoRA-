@@ -10,6 +10,15 @@ instruction-tuned (a meaningful baseline), small enough that 4-bit NF4 quantizat
 all of the T4's memory for activations/optimizer state, and fully supported by current
 `transformers`/`peft`/`bitsandbytes`/`trl`.
 
+## Precision: FP16, not BF16
+
+The NVIDIA T4 has no native BF16 support. `configs/qlora_config.json` and `configs/dpo_config.json`
+set `bnb_4bit_compute_dtype: "float16"`, `bf16: false`, `fp16: true`. `src/resource_monitor.py`'s
+`check_hardware()` is called at the start of `train_qlora.py`, `train_dpo.py`, and
+`evaluate.py::load_model_for_eval()`; it prints the detected GPU name, its CUDA compute capability,
+`torch.cuda.is_bf16_supported()`, and the configured precision, and raises `SystemExit` if the
+configured precision is `bf16` on a GPU that doesn't support it.
+
 ## Repo structure
 
 ```
@@ -56,6 +65,18 @@ for each rubric area instead of a notebook cell).
   loading a second full model copy. `verify_reference_setup()` checks the installed TRL version
   actually supports these fields before training starts, and `verify_trainable_vs_frozen()` prints
   which parameters are trainable vs. frozen so this isn't taken on faith.
+- **Failed-run logging**: `resource_monitor.profile_run()` wraps every run in a try/except. A run
+  that raises (e.g. a genuine CUDA OOM) still gets a record written before the exception is
+  re-raised: `status: "failed"`, the exception type, peak allocated/reserved memory and elapsed wall
+  time at the moment of failure, and the run's config. `avg_step_time_sec` stays `null` if no
+  optimizer step completed. The actual traceback is written separately to `logs/oom_traceback.txt`
+  by the caller (`train_qlora.py::run_deliberate_oom`), since `profile_run` only owns numeric
+  measurements.
+- **OOM/recovery isolation**: `run_deliberate_oom()` loads a fresh quantized base model and a fresh
+  LoRA adapter for the unsafe attempt. After a genuine OOM (or any exception), it deletes the failed
+  model/optimizer/batch, runs `gc.collect()` and `torch.cuda.empty_cache()`, then loads an entirely
+  new base model and a new adapter for the safe rerun — the recovery run never resumes a base model
+  that `prepare_model_for_kbit_training`/`get_peft_model` already mutated during the failed attempt.
 - **Missing-address behavior**: ~15% of generated complaints never mention a street
   (`address_or_null: null` in the ground truth). `generate_preference_data.py` gives every one of
   those a `hallucinate_address` rejection (chosen preserves `null`, rejected invents a street), so
@@ -84,13 +105,30 @@ is pre-filled, and the log starts as an empty list.
 
 ## What's already been run vs. what's pending
 
-- **Already run** (CPU-only, no GPU needed, outputs committed): `generate_instruction_data.py`,
-  `generate_preference_data.py`. See `data/generation_summary.json` and `data/dpo_pairs_summary.json`
-  for the real counts.
+- **Already run** (CPU-only, no GPU needed, outputs committed): `generate_instruction_data.py`.
+  See `data/generation_summary.json` for the real counts (360 examples, ~14% no-address, roughly
+  even split across low/medium/high priority).
 - **Requires Colab** (GPU and/or Hugging Face Hub access this dev container's network policy
   denies): the token-length audit, QLoRA training, the deliberate OOM, DPO, and evaluation. None of
   these have been executed yet, and `logs/experiment_log.json` is an empty list until they are —
   this repo does not contain invented measurements.
+- **Pending review**: `data/dpo_pairs.jsonl` and `data/dpo_pairs_summary.json` were generated
+  against an earlier, provisional instruction dataset and have **not** been regenerated against the
+  current `data/sft_train.jsonl` — they're stale placeholders until the instruction dataset below is
+  reviewed and approved, per instruction.
+
+### Note: the instruction dataset was regenerated after manual review
+
+The first generated dataset paired template selection with priority independently, so a
+high-urgency opener (e.g. "URGENT!!!") could land on a low-priority example ("...whenever someone
+gets a chance"), and issue phrasing was written as mixed noun/verb clauses that read awkwardly when
+substituted into a shared template (e.g. "there's a my trash wasnt picked up"). That dataset was
+replaced: `src/generate_instruction_data.py` now draws its opener and tone phrasing from the same
+priority tier (so low-priority text never contains "URGENT"/"ASAP", and high-priority text always
+carries urgency language), uses consistent noun-phrase issue descriptions, and composes complaints
+from more independently-varying parts (opener, issue phrase, location phrase, tone, sentence order)
+so 360 examples don't read as five templates with swapped fields. `data/sft_*.jsonl` reflect this
+regenerated version; the previous files were overwritten, not kept alongside it.
 
 ## .gitignore strategy
 

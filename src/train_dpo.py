@@ -33,7 +33,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import DPOConfig, DPOTrainer
 
 from generate_instruction_data import build_chat_prompt
-from resource_monitor import StepTimingCallback, profile_run
+from resource_monitor import StepTimingCallback, check_hardware, profile_run, resolve_precision
 
 
 def load_config(path: str) -> dict:
@@ -154,6 +154,8 @@ def main():
     with open(args.qlora_config) as f:
         qlora_cfg = json.load(f)
 
+    check_hardware(resolve_precision(cfg["training"]))
+
     model, tokenizer = load_dual_adapter_model(cfg, qlora_cfg)
     param_report = verify_trainable_vs_frozen(model, cfg["policy_adapter_name"], cfg["reference_adapter_name"])
 
@@ -171,6 +173,7 @@ def main():
         max_prompt_length=cfg["max_prompt_length"],
         optim=cfg["training"]["optim"],
         bf16=cfg["training"]["bf16"],
+        fp16=cfg["training"].get("fp16", False),
         gradient_checkpointing=cfg["training"]["gradient_checkpointing"],
         model_adapter_name=cfg["policy_adapter_name"],
         ref_adapter_name=cfg["reference_adapter_name"],

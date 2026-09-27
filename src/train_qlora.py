@@ -25,7 +25,7 @@ from transformers import (
 )
 
 from generate_instruction_data import build_chat_prompt, target_json
-from resource_monitor import StepTimingCallback, profile_run
+from resource_monitor import StepTimingCallback, check_hardware, profile_run, resolve_precision
 
 
 def load_config(path: str) -> dict:
@@ -133,6 +133,7 @@ def build_training_args(cfg: dict, out_dir: str) -> TrainingArguments:
         max_grad_norm=t["max_grad_norm"],
         optim=t["optim"],
         bf16=t["bf16"],
+        fp16=t.get("fp16", False),
         gradient_checkpointing=t["gradient_checkpointing"],
         logging_steps=10,
         eval_strategy="epoch",
@@ -143,6 +144,8 @@ def build_training_args(cfg: dict, out_dir: str) -> TrainingArguments:
 
 
 def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
+    check_hardware(resolve_precision(cfg["training"]))
+
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -198,60 +201,90 @@ def run_safe_training(cfg: dict, data_dir: str, out_dir: str, log_path: str):
     return model, tokenizer, record
 
 
+def _fresh_quantized_base(cfg: dict):
+    """Loads a brand-new base model instance. Called separately for the unsafe attempt
+    and the fixed rerun so the recovery run never reuses a base model/wrapper that the
+    failed attempt already modified (prepare_model_for_kbit_training and get_peft_model
+    both mutate the module tree they're given)."""
+    return AutoModelForCausalLM.from_pretrained(
+        cfg["model_name"],
+        quantization_config=build_bnb_config(cfg),
+        device_map={"": 0},
+        torch_dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
+    )
+
+
+def _lora_config(cfg: dict) -> LoraConfig:
+    return LoraConfig(
+        r=cfg["lora"]["r"], lora_alpha=cfg["lora"]["alpha"], lora_dropout=cfg["lora"]["dropout"],
+        bias=cfg["lora"]["bias"], task_type=cfg["lora"]["task_type"],
+        target_modules=cfg["lora"]["target_modules_proposed"],
+    )
+
+
+def _build_padded_batch(tokenizer, n, seq_len, device):
+    input_ids = torch.randint(0, tokenizer.vocab_size, (n, seq_len), device=device)
+    return {"input_ids": input_ids, "labels": input_ids.clone(), "attention_mask": torch.ones_like(input_ids)}
+
+
 def run_deliberate_oom(cfg: dict, log_path: str):
     """Genuinely tries to exceed GPU memory with an unsafe batch/seq_len/checkpointing
-    config, captures the real traceback if it OOMs, then reruns the safe config for a
-    single step to show the fix works. Does not fabricate a result if no OOM occurs --
-    it reports what actually happened and tells you to raise the unsafe values further."""
+    config on a freshly loaded base model, captures the real traceback if it OOMs, tears
+    down every reference the failed attempt created, then reloads an entirely fresh base
+    model + fresh adapter for the safe rerun. The recovery run never reuses a base model,
+    optimizer, or batch that the failed attempt already wrapped or touched -- a PEFT-
+    wrapped, partially-mutated module tree is not a safe starting point to resume from.
+    Does not fabricate a result if no OOM occurs -- it reports what actually happened and
+    tells you to raise the unsafe values further."""
+    import gc
     import traceback
+
+    check_hardware(resolve_precision(cfg["training"]))
 
     oom_cfg = cfg["deliberate_oom"]
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    base_model = AutoModelForCausalLM.from_pretrained(
-        cfg["model_name"],
-        quantization_config=build_bnb_config(cfg),
-        device_map={"": 0},
-        torch_dtype=getattr(torch, cfg["quantization"]["bnb_4bit_compute_dtype"]),
-    )
-    lora_cfg = LoraConfig(
-        r=cfg["lora"]["r"], lora_alpha=cfg["lora"]["alpha"], lora_dropout=cfg["lora"]["dropout"],
-        bias=cfg["lora"]["bias"], task_type=cfg["lora"]["task_type"],
-        target_modules=cfg["lora"]["target_modules_proposed"],
-    )
-
-    def build_padded_batch(n, seq_len, device):
-        input_ids = torch.randint(0, tokenizer.vocab_size, (n, seq_len), device=device)
-        return {"input_ids": input_ids, "labels": input_ids.clone(), "attention_mask": torch.ones_like(input_ids)}
-
-    def run_unsafe_step():
-        unsafe_model = prepare_model_for_kbit_training(base_model, use_gradient_checkpointing=False)
-        unsafe_model = get_peft_model(unsafe_model, lora_cfg)
-        unsafe_model.gradient_checkpointing_disable()
-        unsafe_model.train()
-        optimizer = torch.optim.AdamW(unsafe_model.parameters(), lr=2e-4)
-        batch = build_padded_batch(oom_cfg["unsafe_batch_size"], oom_cfg["unsafe_seq_len"], unsafe_model.device)
-        outputs = unsafe_model(**batch)
-        outputs.loss.backward()
-        optimizer.step()
-        return outputs.loss.item()
+    # --- Deliberate OOM attempt: fresh base model, fresh adapter, checkpointing off ---
+    unsafe_base = _fresh_quantized_base(cfg)
+    unsafe_model = prepare_model_for_kbit_training(unsafe_base, use_gradient_checkpointing=False)
+    unsafe_model = get_peft_model(unsafe_model, _lora_config(cfg))
+    unsafe_model.gradient_checkpointing_disable()
+    unsafe_model.train()
+    unsafe_optimizer = torch.optim.AdamW(unsafe_model.parameters(), lr=2e-4)
+    unsafe_batch = None
 
     oom_captured = False
     try:
-        _, _ = profile_run(
+        unsafe_batch = _build_padded_batch(tokenizer, oom_cfg["unsafe_batch_size"], oom_cfg["unsafe_seq_len"], unsafe_model.device)
+
+        def run_unsafe_step():
+            outputs = unsafe_model(**unsafe_batch)
+            outputs.loss.backward()
+            unsafe_optimizer.step()
+            return outputs.loss.item()
+
+        profile_run(
             "deliberate_oom_attempt", run_unsafe_step,
             config={"batch_size": oom_cfg["unsafe_batch_size"], "seq_len": oom_cfg["unsafe_seq_len"], "gradient_checkpointing": False},
             log_path=log_path,
         )
     except torch.cuda.OutOfMemoryError:
         oom_captured = True
+        # profile_run already logged peak memory/elapsed time/status="failed" to
+        # log_path; this traceback file captures the actual stack trace separately.
         tb = traceback.format_exc()
         os.makedirs("logs", exist_ok=True)
         with open("logs/oom_traceback.txt", "w") as f:
             f.write(tb)
         print("Captured a genuine CUDA OutOfMemoryError -- see logs/oom_traceback.txt")
+    finally:
+        # Tear down every reference to the failed attempt before reloading anything --
+        # never reuse a model/optimizer/batch that was wrapped or touched during the
+        # failure, even if the exception wasn't a CUDA OOM.
+        del unsafe_batch, unsafe_optimizer, unsafe_model, unsafe_base
+        gc.collect()
         torch.cuda.empty_cache()
 
     if not oom_captured:
@@ -261,15 +294,18 @@ def run_deliberate_oom(cfg: dict, log_path: str):
             "and rerun -- do not report an OOM that didn't happen."
         )
 
+    # --- Recovery run: entirely fresh base model + fresh adapter, safe config ---
+    fixed_base = _fresh_quantized_base(cfg)
+    fixed_model = prepare_model_for_kbit_training(fixed_base, use_gradient_checkpointing=True)
+    fixed_model = get_peft_model(fixed_model, _lora_config(cfg))
+    fixed_model.train()
+    fixed_optimizer = torch.optim.AdamW(fixed_model.parameters(), lr=2e-4)
+
     def run_fixed_step():
-        fixed_model = prepare_model_for_kbit_training(base_model, use_gradient_checkpointing=True)
-        fixed_model = get_peft_model(fixed_model, lora_cfg)
-        fixed_model.train()
-        optimizer = torch.optim.AdamW(fixed_model.parameters(), lr=2e-4)
-        batch = build_padded_batch(cfg["training"]["per_device_train_batch_size"], cfg["max_seq_len"], fixed_model.device)
+        batch = _build_padded_batch(tokenizer, cfg["training"]["per_device_train_batch_size"], cfg["max_seq_len"], fixed_model.device)
         outputs = fixed_model(**batch)
         outputs.loss.backward()
-        optimizer.step()
+        fixed_optimizer.step()
         return outputs.loss.item()
 
     profile_run(
@@ -277,6 +313,9 @@ def run_deliberate_oom(cfg: dict, log_path: str):
         config={"batch_size": cfg["training"]["per_device_train_batch_size"], "seq_len": cfg["max_seq_len"], "gradient_checkpointing": True},
         log_path=log_path,
     )
+    del fixed_model, fixed_base, fixed_optimizer
+    gc.collect()
+    torch.cuda.empty_cache()
     return oom_captured
 
 

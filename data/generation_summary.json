@@ -3,6 +3,11 @@
   "train": 280,
   "val": 30,
   "test": 50,
-  "no_address_share": 0.153,
+  "no_address_share": 0.136,
+  "priority_counts": {
+    "medium": 124,
+    "low": 120,
+    "high": 116
+  },
   "seed": 42
 }
